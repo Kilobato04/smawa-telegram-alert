@@ -1,1 +1,12 @@
-xx
+{
+  "name": "smawa-alert-generator",
+  "version": "1.0.0",
+  "description": "Genera capturas del panel SMAWA y las envía a Telegram",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@sparticuz/chromium": "^119.0.2",
+    "axios": "^1.6.2",
+    "puppeteer-core": "^21.5.0"
+  }
+}
