@@ -14,6 +14,7 @@
             --text-muted: #666666;
             --alert-red: #e74c3c;
             --ok-green: #2ecc71;
+            --warning-yellow: #f39c12;
             --border-color: #e0e0e0;
         }
         body {
@@ -27,15 +28,18 @@
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 10px; }
         .card-title h2 { margin: 0; font-size: 16px; color: var(--text-main); }
         .card-title p { margin: 2px 0 0 0; font-size: 12px; color: var(--text-muted); }
-        .location-text { font-size: 10px; color: #888; margin-top: 4px; display: flex; align-items: center; gap: 4px;}
-        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .location-text { font-size: 10px; color: #888; margin-top: 4px; }
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
         .metric { font-size: 14px; }
+        .metric-title { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;}
         .metric-val { font-size: 20px; font-weight: bold; color: var(--primary-blue); }
         .metric-m3 { font-size: 14px; color: var(--text-muted); font-weight: normal; }
-        .flow-status { font-weight: bold; margin-top: 5px; }
+        .flow-status { font-weight: bold; font-size: 13px; }
         .flow-negative { color: var(--alert-red); }
         .flow-positive { color: var(--ok-green); }
-        .chart-container { width: 100%; height: 180px; margin-top: 10px; }
+        .sensor-ok { color: var(--ok-green); font-weight: bold; font-size: 12px; }
+        .sensor-warning { background-color: #fdf3e8; color: var(--warning-yellow); padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; border: 1px solid #fde3c2;}
+        .chart-container { width: 100%; height: 160px; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -43,7 +47,7 @@
     <div class="dashboard" id="capturePanel">
         <div class="header">
             <h1>Estado de Red de Cisternas SMAWA - IBERO CDMX</h1>
-            <p id="updateTime" style="margin: 5px 0 0 0; font-size: 12px; color: #666;"></p>
+            <p id="updateTime" style="margin: 5px 0 0 0; font-size: 13px; color: #666; font-weight: 500;"></p>
         </div>
         <div id="cisternsContainer"></div>
     </div>
@@ -61,21 +65,18 @@
             return { m3: volumeM3, liters: volumeM3 * 1000 };
         }
 
-        // Generador de 120 horas (5 días) de datos simulados
-        function generate5DayData(geo) {
+        function generate5DayData(geo, simulateFailure = false) {
             const times = [];
             const distances = [];
             let now = new Date();
-            let currentDist = geo.height_m * 0.4; // Inicia al 60% de llenado
+            let currentDist = geo.height_m * 0.4; 
             
             for (let i = 120; i >= 0; i--) {
                 let d = new Date(now.getTime() - i * 3600 * 1000);
                 times.push(d);
                 
-                // Consumo continuo (la distancia aumenta)
                 currentDist += (Math.random() * 0.03 + 0.01); 
                 
-                // Recarga cada ~24 horas (la distancia disminuye)
                 if (i % 24 === 0 && i !== 120) {
                     currentDist -= (Math.random() * 0.5 + 0.3);
                 }
@@ -85,17 +86,58 @@
                 
                 distances.push(currentDist);
             }
+
+            // Simular falla de sensor en las últimas 12 horas si se requiere
+            if (simulateFailure) {
+                const stuckValue = distances[distances.length - 13];
+                for(let i = 1; i <= 12; i++) {
+                    distances[distances.length - i] = stuckValue;
+                }
+            }
+
             return { x: times, dist: distances };
+        }
+
+        // Analizar datos para Autonomía y Falla
+        function analyzeMetrics(series, geo) {
+            let isStuck = true;
+            let totalConsumption24h = 0;
+
+            // Verificar si el sensor está atascado (últimas 12 lecturas iguales)
+            const lastVal = series.dist[series.dist.length - 1];
+            for(let i = 1; i <= 12; i++) {
+                if(series.dist[series.dist.length - i] !== lastVal) {
+                    isStuck = false;
+                    break;
+                }
+            }
+
+            // Calcular consumo promedio de las últimas 24 horas (solo gastos, ignorando recargas)
+            for(let i = 1; i <= 24; i++) {
+                let idx = series.dist.length - i;
+                let diffL = calcVolume(series.dist[idx], geo).liters - calcVolume(series.dist[idx-1], geo).liters;
+                if (diffL < 0) { 
+                    totalConsumption24h += Math.abs(diffL);
+                }
+            }
+            const avgHourlyConsumption = totalConsumption24h / 24;
+
+            return { isStuck, avgHourlyConsumption };
         }
 
         document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('cisternsContainer');
+            
+            // Formatear la fecha actual (Ej. Miércoles, 05 de Agosto de 2026)
             const now = new Date();
-            document.getElementById('updateTime').innerText = `Actualizado: ${now.toLocaleTimeString('es-MX')} hrs`;
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            const formattedDate = now.toLocaleDateString('es-MX', options);
+            document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
 
             Object.keys(GEOMETRY).forEach(id => {
                 const geo = GEOMETRY[id];
-                const series = generate5DayData(geo);
+                // Forzar falla solo en Cisterna B para el mockup
+                const series = generate5DayData(geo, id === "CISTERNA_B");
                 
                 const currentDist = series.dist[series.dist.length - 1];
                 const prevDist = series.dist[series.dist.length - 2];
@@ -104,13 +146,24 @@
                 const prevVol = calcVolume(prevDist, geo);
 
                 const flowL = currentVol.liters - prevVol.liters;
-                const flowM3 = currentVol.m3 - prevVol.m3;
                 
                 const isPositive = flowL > 0;
-                const isStable = Math.abs(flowL) < 10; // Margen de estabilidad
+                const isStable = Math.abs(flowL) < 10; 
                 const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
-                const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga detectada' : 'Gasto registrado');
+                const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
                 const sign = isPositive ? '+' : '';
+
+                // Análisis Avanzado (Autonomía y Sensor)
+                const analysis = analyzeMetrics(series, geo);
+                let autonomyText = "N/A";
+                if (analysis.avgHourlyConsumption > 0) {
+                    const daysLeft = currentVol.liters / (analysis.avgHourlyConsumption * 24);
+                    autonomyText = daysLeft > 30 ? "+30 días" : `${daysLeft.toFixed(1)} días`;
+                }
+                
+                const sensorHtml = analysis.isStuck 
+                    ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
+                    : `<div class="sensor-ok">✅ Operativo</div>`;
 
                 const card = document.createElement('div');
                 card.className = 'card';
@@ -118,34 +171,44 @@
                     <div class="card-header">
                         <div class="card-title">
                             <h2>${geo.name}</h2>
-                            <p>Capacidad Max: ${geo.max_l.toLocaleString()} L (${(geo.max_l/1000).toLocaleString()} m³)</p>
+                            <p>Max: ${geo.max_l.toLocaleString()} L | ${sensorHtml}</p>
                             <div class="location-text">📍 Lat: ${geo.lat} | Lon: ${geo.lng}</div>
                         </div>
                         <div style="text-align: right;">
                             <div class="metric-val">${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
                             <div class="metric-m3">${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³</div>
+                            <div style="font-size: 16px; font-weight: bold; color: ${geo.color}; margin-top: 5px;">
+                                ${((currentVol.liters / geo.max_l) * 100).toFixed(1)}% Lleno
+                            </div>
                         </div>
                     </div>
+                    
                     <div class="metrics-grid">
                         <div class="metric">
-                            <div style="color: var(--text-muted); font-size: 12px;">Variación última hora</div>
+                            <div class="metric-title">Última Hora</div>
                             <div class="flow-status ${flowClass}">
                                 ${flowStatusText}:<br>
                                 ${sign}${flowL.toLocaleString('es-MX', {maximumFractionDigits: 0})} L 
                             </div>
                         </div>
-                        <div class="metric" style="text-align: right;">
-                            <div style="color: var(--text-muted); font-size: 12px;">Nivel de Llenado</div>
-                            <div style="font-size: 20px; font-weight: bold; color: ${geo.color};">
-                                ${((currentVol.liters / geo.max_l) * 100).toFixed(1)}%
+                        <div class="metric">
+                            <div class="metric-title">Consumo Promedio</div>
+                            <div style="font-weight: 500; font-size: 13px;">
+                                ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h
+                            </div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-title">Autonomía Est.</div>
+                            <div style="font-weight: bold; font-size: 14px;">
+                                ${autonomyText}
                             </div>
                         </div>
                     </div>
+                    
                     <div id="chart_${id}" class="chart-container"></div>
                 `;
                 container.appendChild(card);
 
-                // Mapear distancias a volumen m3 para la gráfica
                 const volumeSeries = series.dist.map(dist => calcVolume(dist, geo).m3);
                 
                 Plotly.newPlot(`chart_${id}`, [{
@@ -161,7 +224,7 @@
                     xaxis: { 
                         showgrid: true, 
                         gridcolor: '#eee',
-                        tickformat: '%d %b', // Muestra "05 Aug"
+                        tickformat: '%d %b',
                         tickangle: -45,
                         tickfont: { size: 9, color: '#888' }
                     },
