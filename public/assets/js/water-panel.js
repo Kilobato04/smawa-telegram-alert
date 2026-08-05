@@ -27,14 +27,10 @@ async function fetchHistoricalData(token) {
     }
 }
 
-// Extraer el último estado de batería directamente del payload o de un request dedicado si fuera necesario. 
-// Nota: Si el endpoint de nivel es idéntico en estructura al de batería pero cambiando idSensor=1, 
-// podemos hacer un fetch rápido o extraerlo si el backend lo unificara. Como son endpoints separados, 
-// haremos un fetch directo del último punto con un rango corto de tiempo para asegurar el dato actual.
 async function fetchLatestBattery(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setHours(startDate.getHours() - 2); // Solo las últimas 2 horas para traer un punto reciente
+    startDate.setHours(startDate.getHours() - 2); 
 
     const url = `/api/GetData?token=${token}&idSensor=1&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
@@ -42,7 +38,6 @@ async function fetchLatestBattery(token) {
         const response = await fetch(url);
         const data = await response.json();
         if (data && data.length > 0) {
-            // Retorna estrictamente el último registro disponible
             return parseFloat(data[data.length - 1].Data);
         }
         return null;
@@ -52,19 +47,36 @@ async function fetchLatestBattery(token) {
     }
 }
 
+// Procesa el JSON, detecta huecos de tiempo e inyecta nulls para romper la línea
 function processApiData(apiRawData, geo) {
     const times = [];
     const distances = [];
     
     if (!apiRawData || apiRawData.length === 0) return { valid: false };
 
+    let lastTime = null;
+    const MAX_GAP_MS = 3 * 3600 * 1000; // Si pasan más de 3 horas sin datos, consideramos que el sistema se cayó
+
     apiRawData.forEach(item => {
         let dist = parseFloat(item.Data);
+        let currentTime = new Date(item.TimeStamp);
+
         if (!isNaN(dist)) {
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
+
+            // Si hay un registro previo y el salto de tiempo es mayor al límite, inyectamos un hueco (null)
+            if (lastTime !== null) {
+                let diff = currentTime.getTime() - lastTime.getTime();
+                if (diff > MAX_GAP_MS) {
+                    times.push(new Date(lastTime.getTime() + 1000)); // Un segundo después del último válido
+                    distances.push(null);                            // Rompe la línea en Plotly
+                }
+            }
+
             distances.push(dist);
-            times.push(new Date(item.TimeStamp));
+            times.push(currentTime);
+            lastTime = currentTime;
         }
     });
 
@@ -72,8 +84,12 @@ function processApiData(apiRawData, geo) {
 }
 
 function analyzeMetrics(series, geo) {
-    const lastIdx = series.dist.length - 1;
-    const currentTime = series.x[lastIdx].getTime();
+    // Filtramos nulls temporalmente para análisis de consumo seguro
+    const validPoints = series.dist.map((d, i) => ({ dist: d, time: series.x[i] })).filter(p => p.dist !== null);
+    if (validPoints.length === 0) return { isStuck: true, avgHourlyConsumption: 0 };
+
+    const lastIdx = validPoints.length - 1;
+    const currentTime = validPoints[lastIdx].time.getTime();
     
     let totalConsumption24h = 0;
     let isStuck12h = true;
@@ -82,19 +98,19 @@ function analyzeMetrics(series, geo) {
     const last12hStart = currentTime - 12 * 3600 * 1000;
     const last24hStart = currentTime - 24 * 3600 * 1000;
 
-    for (let i = 0; i <= lastIdx; i++) {
-        const t = series.x[i].getTime();
+    validPoints.forEach(p => {
+        const t = p.time.getTime();
         if (t >= last24hStart) {
             if (prevD !== null) {
-                let diffL = calcVolume(series.dist[i], geo).liters - calcVolume(prevD, geo).liters;
+                let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
                 if (diffL < 0) totalConsumption24h += Math.abs(diffL);
             }
-            prevD = series.dist[i];
+            prevD = p.dist;
         }
         if (t >= last12hStart) {
-            if (series.dist[i] !== series.dist[lastIdx]) isStuck12h = false;
+            if (p.dist !== validPoints[lastIdx].dist) isStuck12h = false;
         }
-    }
+    });
     
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
@@ -115,7 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const geo = APP_CONFIG.GEOMETRY[id];
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
         
-        // Ejecutamos nivel (histórico 5 días) y batería (último punto rápido) en paralelo
         const [apiRawData, batteryVal] = await Promise.all([
             fetchHistoricalData(token),
             fetchLatestBattery(token)
@@ -138,13 +153,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             continue;
         }
 
-        const lastIdx = series.dist.length - 1;
-        const currentDist = series.dist[lastIdx];
-        const currentTime = series.x[lastIdx].getTime();
+        // Obtener el último punto válido (ignorando nulls si el último fuera nulo)
+        let lastValidIdx = series.dist.length - 1;
+        while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) {
+            lastValidIdx--;
+        }
+        
+        if (lastValidIdx < 0) continue;
+
+        const currentDist = series.dist[lastValidIdx];
+        const currentTime = series.x[lastValidIdx].getTime();
 
         let prevDist = currentDist;
-        for (let i = lastIdx; i >= 0; i--) {
-            if ((currentTime - series.x[i].getTime()) >= 3600 * 1000) {
+        for (let i = lastValidIdx; i >= 0; i--) {
+            if (series.dist[i] !== null && (currentTime - series.x[i].getTime()) >= 3600 * 1000) {
                 prevDist = series.dist[i];
                 break;
             }
@@ -221,12 +243,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
         container.appendChild(card);
 
-        const volumeSeries = series.dist.map(dist => calcVolume(dist, geo).m3);
+        const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
+        
         Plotly.newPlot(`chart_${id}`, [{
             x: series.x,
             y: volumeSeries,
             type: 'scatter',
             mode: 'lines',
+            connectgaps: false, // Forzar a Plotly a romper la línea cuando encuentre un valor nulo
             line: { color: geo.color, shape: 'spline', smoothing: 0.2, width: 2 },
             fill: 'tozeroy',
             fillcolor: `${geo.color}22`
