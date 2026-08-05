@@ -1,60 +1,82 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Aquí se integrarán las peticiones reales a las APIs de telemetría.
-    // Simulando la carga de datos estructurados:
-    const cisternaData = await fetchMockData();
-    renderDashboard(cisternaData);
+    const apiData = await fetchMockData();
+    renderDashboard(apiData);
 });
 
+// Simulador de respuestas de los 3 sensores activos
 async function fetchMockData() {
     return new Promise(resolve => {
         setTimeout(() => {
-            resolve([
-                { id: "CISTERN_1", name: "Cisterna Principal", distance_m: 1.2, prev_distance_m: 1.0 },
-                { id: "CISTERN_2", name: "Cisterna Secundaria", distance_m: 0.5, prev_distance_m: 0.5 },
-                { id: "CISTERN_3", name: "Cisterna Pluvial", distance_m: 2.0, prev_distance_m: 2.5 },
-                { id: "CISTERN_4", name: "Tanque Elevado", distance_m: 1.8, prev_distance_m: 1.5 }
-            ]);
+            resolve({
+                // Las distancias de A y C deberían ser iguales o muy similares en la realidad
+                "SMAWA_A": { distance_m: 1.2, prev_distance_m: 1.1 },
+                "SMAWA_C": { distance_m: 1.2, prev_distance_m: 1.1 },
+                "SMAWA_B": { distance_m: 0.8, prev_distance_m: 0.9 }
+            });
         }, 500);
     });
 }
 
-function calculateMetrics(sensorData) {
-    const geo = APP_CONFIG.GEOMETRY[sensorData.id];
-    if (!geo) return null;
+function calculateMetrics(cisternId, cisternConfig, apiData) {
+    // Si no tiene sensor asignado, no hay métricas que calcular
+    if (!cisternConfig.sensor_id) return null;
+    
+    const sensorData = apiData[cisternConfig.sensor_id];
+    
+    // Si el sensor falló o no hay datos, retornamos null para manejar el error
+    if (!sensorData) return null;
 
-    // Nivel = Altura total - distancia medida
-    const currentLevel = Math.max(0, geo.height_m - sensorData.distance_m);
-    const prevLevel = Math.max(0, geo.height_m - sensorData.prev_distance_m);
+    const currentLevel = Math.max(0, cisternConfig.height_m - sensorData.distance_m);
+    const prevLevel = Math.max(0, cisternConfig.height_m - sensorData.prev_distance_m);
 
-    // Volumen en litros (1 m3 = 1000 L)
-    const currentVolume = currentLevel * geo.area_m2 * 1000;
-    const prevVolume = prevLevel * geo.area_m2 * 1000;
-
-    // Gasto (-) o Recarga (+)
+    const currentVolume = currentLevel * cisternConfig.area_m2 * 1000;
+    const prevVolume = prevLevel * cisternConfig.area_m2 * 1000;
+    
     const flow = currentVolume - prevVolume;
+    const fillPercentage = (currentVolume / cisternConfig.max_capacity_l) * 100;
 
     return {
         volume: currentVolume,
         flow: flow,
+        percentage: fillPercentage,
         status: flow > 0 ? "Recarga" : (flow < 0 ? "Gasto" : "Estable")
     };
 }
 
-function renderDashboard(cisternsRaw) {
+function renderDashboard(apiData) {
     const grid = document.getElementById('cisternsGrid');
     grid.innerHTML = '';
 
-    cisternsRaw.forEach(raw => {
-        const metrics = calculateMetrics(raw);
-        if (!metrics) return;
+    // Iteramos sobre A, C, B, D
+    Object.keys(APP_CONFIG.GEOMETRY).forEach(cisternId => {
+        const config = APP_CONFIG.GEOMETRY[cisternId];
+        
+        // Excluimos las no instrumentadas (Cisterna D) de la visualización principal
+        if (!config.sensor_id) return; 
+
+        const metrics = calculateMetrics(cisternId, config, apiData);
+        
+        // Tarjeta de error si el sensor está caído
+        if (!metrics) {
+            grid.innerHTML += `
+                <div class="cistern-card">
+                    <h2 class="cistern-name">${config.name}</h2>
+                    <div class="volume-display" style="color: #999;">Sin Datos</div>
+                    <div class="flow-status">Revisar conexión SMAWA</div>
+                </div>`;
+            return;
+        }
 
         const flowClass = metrics.flow < 0 ? 'flow-negative' : (metrics.flow > 0 ? 'flow-positive' : '');
         const flowPrefix = metrics.flow > 0 ? '+' : '';
         
         const card = `
             <div class="cistern-card">
-                <h2 class="cistern-name">${raw.name}</h2>
-                <div class="volume-display">${metrics.volume.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                <h2 class="cistern-name">${config.name}</h2>
+                <div class="volume-display">
+                    ${metrics.volume.toLocaleString('es-MX', {maximumFractionDigits: 0})} L 
+                    <span style="font-size: 14px; color: #666;">(${metrics.percentage.toFixed(1)}%)</span>
+                </div>
                 <div class="flow-status ${flowClass}">
                     ${metrics.status}: ${flowPrefix}${metrics.flow.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h
                 </div>
