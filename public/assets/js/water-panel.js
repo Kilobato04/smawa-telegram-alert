@@ -33,7 +33,7 @@ async function fetchHistoricalData(token) {
 async function fetchBatteryData(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 2); // 2 días es suficiente para capturar el último estado de batería
+    startDate.setDate(endDate.getDate() - 2); 
 
     const dtEnd = formatDateForApi(endDate);
     const dtStart = formatDateForApi(startDate);
@@ -44,7 +44,6 @@ async function fetchBatteryData(token) {
         const response = await fetch(url);
         const data = await response.json();
         if (data && data.length > 0) {
-            // Retornamos el último valor registrado
             return parseFloat(data[data.length - 1].Data);
         }
         return null;
@@ -122,7 +121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
         
-        // Ejecutamos ambas peticiones en paralelo para mayor velocidad
         const [apiRawData, batteryVal] = await Promise.all([
             fetchHistoricalData(token),
             fetchBatteryData(token)
@@ -172,13 +170,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
+        // URL de Google Maps para las coordenadas de esta cisterna
+        const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
+
         const card = document.createElement('div');
         card.className = 'cistern-card';
         card.innerHTML = `
             <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                 <div>
                     <h2 class="cistern-name" style="margin:0; font-size:16px;">${geo.name}</h2>
-                    <p style="margin:4px 0 0 0; font-size:12px; color:#666;">
+                    <p style="margin:3px 0; font-size:11px;">
+                        <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">
+                            📍 ${geo.lat}, ${geo.lng} ↗
+                        </a>
+                    </p>
+                    <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
                         📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
                     </p>
                     <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
@@ -236,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
         const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
         
-        telegramCaption += `${emojiColor} *[${geo.name}](https://maps.google.com/?q=${geo.lat},${geo.lng})*\n`;
+        telegramCaption += `${emojiColor} *[${geo.name}](${mapsUrl})*\n`;
         telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | 🔋 ${batteryVal !== null ? batteryVal.toFixed(0) : 'N/A'}%\n`;
         telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
         telegramCaption += `Autonomía est.: ${autonomyText}\n`;
