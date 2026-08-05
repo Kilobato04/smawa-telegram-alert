@@ -47,30 +47,35 @@ async function fetchLatestBattery(token) {
     }
 }
 
-// Procesa el JSON, detecta huecos de tiempo e inyecta nulls para romper la línea
-function processApiData(apiRawData, geo) {
+// Procesa el JSON, aplica calibración si es Cisterna A, detecta huecos de tiempo e inyecta nulls
+function processApiData(apiRawData, geo, cisternId) {
     const times = [];
     const distances = [];
     
     if (!apiRawData || apiRawData.length === 0) return { valid: false };
 
     let lastTime = null;
-    const MAX_GAP_MS = 3 * 3600 * 1000; // Si pasan más de 3 horas sin datos, consideramos que el sistema se cayó
+    const MAX_GAP_MS = 3 * 3600 * 1000; // 3 horas sin datos rompe la línea
 
     apiRawData.forEach(item => {
-        let dist = parseFloat(item.Data);
+        let rawDist = parseFloat(item.Data);
         let currentTime = new Date(item.TimeStamp);
 
-        if (!isNaN(dist)) {
+        if (!isNaN(rawDist)) {
+            // Aplicar Ecuación de Calibración si es la Cisterna A (Vasos comunicantes con C)
+            let dist = rawDist;
+            if (cisternId === "CISTERNA_A") {
+                dist = (rawDist + 0.3) * (5 / 5.09);
+            }
+
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
 
-            // Si hay un registro previo y el salto de tiempo es mayor al límite, inyectamos un hueco (null)
             if (lastTime !== null) {
                 let diff = currentTime.getTime() - lastTime.getTime();
                 if (diff > MAX_GAP_MS) {
-                    times.push(new Date(lastTime.getTime() + 1000)); // Un segundo después del último válido
-                    distances.push(null);                            // Rompe la línea en Plotly
+                    times.push(new Date(lastTime.getTime() + 1000));
+                    distances.push(null);
                 }
             }
 
@@ -84,7 +89,6 @@ function processApiData(apiRawData, geo) {
 }
 
 function analyzeMetrics(series, geo) {
-    // Filtramos nulls temporalmente para análisis de consumo seguro
     const validPoints = series.dist.map((d, i) => ({ dist: d, time: series.x[i] })).filter(p => p.dist !== null);
     if (validPoints.length === 0) return { isStuck: true, avgHourlyConsumption: 0 };
 
@@ -143,7 +147,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     for (const res of results) {
         const { id, geo, apiRawData, batteryVal } = res;
-        const series = processApiData(apiRawData, geo);
+        // Pasamos el identificador 'id' para que processApiData sepa si debe aplicar la calibración de la Cisterna A
+        const series = processApiData(apiRawData, geo, id);
         const batteryText = batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A';
         const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
 
@@ -153,7 +158,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             continue;
         }
 
-        // Obtener el último punto válido (ignorando nulls si el último fuera nulo)
         let lastValidIdx = series.dist.length - 1;
         while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) {
             lastValidIdx--;
@@ -206,7 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </a>
                     </p>
                     <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                        📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
+                        📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> ${id === "CISTERNA_A" ? '<span style="color:#007acc; font-size:10px;">(Calibrada)</span>' : ''} | ${batteryText}
                     </p>
                     <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
                         Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
@@ -250,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             y: volumeSeries,
             type: 'scatter',
             mode: 'lines',
-            connectgaps: false, // Forzar a Plotly a romper la línea cuando encuentre un valor nulo
+            connectgaps: false,
             line: { color: geo.color, shape: 'spline', smoothing: 0.2, width: 2 },
             fill: 'tozeroy',
             fillcolor: `${geo.color}22`
