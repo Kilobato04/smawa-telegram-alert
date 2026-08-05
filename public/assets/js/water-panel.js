@@ -10,11 +10,11 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- FETCH HISTÓRICO REAL ---
+// --- FETCH HISTÓRICO (NIVEL Y BATERÍA) ---
 async function fetchHistoricalData(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 5); // 5 días atrás
+    startDate.setDate(endDate.getDate() - 5); 
 
     const dtEnd = formatDateForApi(endDate);
     const dtStart = formatDateForApi(startDate);
@@ -23,10 +23,33 @@ async function fetchHistoricalData(token) {
 
     try {
         const response = await fetch(url);
-        const data = await response.json();
-        return data; // Array JSON
+        return await response.json();
     } catch (error) {
-        console.error("Error consultando API:", error);
+        console.error("Error consultando API de Nivel:", error);
+        return null;
+    }
+}
+
+async function fetchBatteryData(token) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 2); // 2 días es suficiente para capturar el último estado de batería
+
+    const dtEnd = formatDateForApi(endDate);
+    const dtStart = formatDateForApi(startDate);
+
+    const url = `/api/GetData?token=${token}&idSensor=1&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data && data.length > 0) {
+            // Retornamos el último valor registrado
+            return parseFloat(data[data.length - 1].Data);
+        }
+        return null;
+    } catch (error) {
+        console.error("Error consultando Batería:", error);
         return null;
     }
 }
@@ -41,8 +64,8 @@ function processApiData(apiRawData, geo) {
     apiRawData.forEach(item => {
         let dist = parseFloat(item.Data);
         if (!isNaN(dist)) {
-            if (dist < 0.1) dist = 0.1; // Límite inferior físico
-            if (dist > geo.height_m) dist = geo.height_m; // Límite superior físico (vacía)
+            if (dist < 0.1) dist = 0.1; 
+            if (dist > geo.height_m) dist = geo.height_m; 
             
             distances.push(dist);
             times.push(new Date(item.TimeStamp));
@@ -52,7 +75,7 @@ function processApiData(apiRawData, geo) {
     return { x: times, dist: distances, valid: distances.length > 0 };
 }
 
-// Analiza consumos y bloqueos usando marcas de tiempo reales
+// Analiza consumos y bloqueos
 function analyzeMetrics(series, geo) {
     const lastIdx = series.dist.length - 1;
     const currentTime = series.x[lastIdx].getTime();
@@ -67,16 +90,14 @@ function analyzeMetrics(series, geo) {
     for (let i = 0; i <= lastIdx; i++) {
         const t = series.x[i].getTime();
         
-        // Sumar consumos de las últimas 24h
         if (t >= last24hStart) {
             if (prevD !== null) {
                 let diffL = calcVolume(series.dist[i], geo).liters - calcVolume(prevD, geo).liters;
-                if (diffL < 0) totalConsumption24h += Math.abs(diffL); // Gasto real
+                if (diffL < 0) totalConsumption24h += Math.abs(diffL);
             }
             prevD = series.dist[i];
         }
         
-        // Revisar si el sensor varió en las últimas 12h
         if (t >= last12hStart) {
             if (series.dist[i] !== series.dist[lastIdx]) isStuck12h = false;
         }
@@ -95,17 +116,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
-    // Procesamos cada cisterna
     for (const id of Object.keys(APP_CONFIG.GEOMETRY)) {
         const geo = APP_CONFIG.GEOMETRY[id];
         if (!geo.sensor_id) continue;
 
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
-        const apiRawData = await fetchHistoricalData(token);
+        
+        // Ejecutamos ambas peticiones en paralelo para mayor velocidad
+        const [apiRawData, batteryVal] = await Promise.all([
+            fetchHistoricalData(token),
+            fetchBatteryData(token)
+        ]);
+
         const series = processApiData(apiRawData, geo);
+        const batteryText = batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A';
         
         if (!series.valid) {
-            // Manejo de error si la API no devuelve datos
             container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos del sensor en 5 días</div></div>`;
             telegramCaption += `*[${geo.name}](https://maps.google.com/?q=${geo.lat},${geo.lng})*\n⚠️ Sensor sin datos recientes.\n\n`;
             continue;
@@ -115,7 +141,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const currentDist = series.dist[lastIdx];
         const currentTime = series.x[lastIdx].getTime();
 
-        // Buscar lectura de hace 1 hora para comparar
         let prevDist = currentDist;
         for (let i = lastIdx; i >= 0; i--) {
             if ((currentTime - series.x[i].getTime()) >= 3600 * 1000) {
@@ -129,7 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const flowL = currentVol.liters - prevVol.liters;
         const isPositive = flowL > 0;
-        const isStable = Math.abs(flowL) < 50; // Margen de tolerancia de 50L por fluctuaciones del agua
+        const isStable = Math.abs(flowL) < 50; 
         
         const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
         const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
@@ -153,11 +178,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                 <div>
                     <h2 class="cistern-name" style="margin:0; font-size:16px;">${geo.name}</h2>
-                    <p style="margin:0; font-size:12px; color:#666;">Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}</p>
+                    <p style="margin:4px 0 0 0; font-size:12px; color:#666;">
+                        📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
+                    </p>
+                    <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
+                        Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
+                    </p>
                 </div>
                 <div style="text-align: right;">
-                    <div class="volume-display" style="font-size:20px; font-weight:bold; color:#007acc;">${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
-                    <div style="font-size: 14px; font-weight: bold; color: ${geo.color};">${fillPercentage}% Lleno</div>
+                    <div class="volume-display" style="font-size:20px; font-weight:bold; color:#007acc;">
+                        ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L
+                    </div>
+                    <div style="font-size: 13px; color: #666;">
+                        ${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
+                        ${fillPercentage}% Lleno
+                    </div>
                 </div>
             </div>
             
@@ -167,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${flowL.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
                 </div>
                 <div>
-                    <div style="color:#666; font-size:11px;">PROMEDIO</div>
+                    <div style="color:#666; font-size:11px;">PROMEDIO (24h)</div>
                     <div>${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
                 </div>
                 <div>
@@ -200,12 +237,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
         
         telegramCaption += `${emojiColor} *[${geo.name}](https://maps.google.com/?q=${geo.lat},${geo.lng})*\n`;
-        telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus})\n`;
+        telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | 🔋 ${batteryVal !== null ? batteryVal.toFixed(0) : 'N/A'}%\n`;
+        telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
         telegramCaption += `Autonomía est.: ${autonomyText}\n`;
         telegramCaption += `Tasa de consumo: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h\n`;
         telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
     }
 
     window.telegramCaption = telegramCaption;
-    setTimeout(() => { window.dashboardReady = true; }, 2000); // 2 segundos para asegurar render de múltiples gráficas Plotly
+    setTimeout(() => { window.dashboardReady = true; }, 2000); 
 });
