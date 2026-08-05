@@ -10,16 +10,13 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- FETCH HISTÓRICO (NIVEL Y BATERÍA) ---
+// --- FETCH HISTÓRICO ÚNICO (NIVEL) ---
 async function fetchHistoricalData(token) {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - 5); 
 
-    const dtEnd = formatDateForApi(endDate);
-    const dtStart = formatDateForApi(startDate);
-
-    const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
+    const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
     try {
         const response = await fetch(url);
@@ -30,20 +27,22 @@ async function fetchHistoricalData(token) {
     }
 }
 
-async function fetchBatteryData(token) {
+// Extraer el último estado de batería directamente del payload o de un request dedicado si fuera necesario. 
+// Nota: Si el endpoint de nivel es idéntico en estructura al de batería pero cambiando idSensor=1, 
+// podemos hacer un fetch rápido o extraerlo si el backend lo unificara. Como son endpoints separados, 
+// haremos un fetch directo del último punto con un rango corto de tiempo para asegurar el dato actual.
+async function fetchLatestBattery(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 2); 
+    startDate.setHours(startDate.getHours() - 2); // Solo las últimas 2 horas para traer un punto reciente
 
-    const dtEnd = formatDateForApi(endDate);
-    const dtStart = formatDateForApi(startDate);
-
-    const url = `/api/GetData?token=${token}&idSensor=1&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
+    const url = `/api/GetData?token=${token}&idSensor=1&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
     try {
         const response = await fetch(url);
         const data = await response.json();
         if (data && data.length > 0) {
+            // Retorna estrictamente el último registro disponible
             return parseFloat(data[data.length - 1].Data);
         }
         return null;
@@ -53,7 +52,6 @@ async function fetchBatteryData(token) {
     }
 }
 
-// Procesa el JSON y limita los valores a la geometría física
 function processApiData(apiRawData, geo) {
     const times = [];
     const distances = [];
@@ -65,7 +63,6 @@ function processApiData(apiRawData, geo) {
         if (!isNaN(dist)) {
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
-            
             distances.push(dist);
             times.push(new Date(item.TimeStamp));
         }
@@ -74,7 +71,6 @@ function processApiData(apiRawData, geo) {
     return { x: times, dist: distances, valid: distances.length > 0 };
 }
 
-// Analiza consumos y bloqueos
 function analyzeMetrics(series, geo) {
     const lastIdx = series.dist.length - 1;
     const currentTime = series.x[lastIdx].getTime();
@@ -88,7 +84,6 @@ function analyzeMetrics(series, geo) {
 
     for (let i = 0; i <= lastIdx; i++) {
         const t = series.x[i].getTime();
-        
         if (t >= last24hStart) {
             if (prevD !== null) {
                 let diffL = calcVolume(series.dist[i], geo).liters - calcVolume(prevD, geo).liters;
@@ -96,7 +91,6 @@ function analyzeMetrics(series, geo) {
             }
             prevD = series.dist[i];
         }
-        
         if (t >= last12hStart) {
             if (series.dist[i] !== series.dist[lastIdx]) isStuck12h = false;
         }
@@ -105,7 +99,7 @@ function analyzeMetrics(series, geo) {
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
-// --- RENDERIZADO PRINCIPAL ---
+// --- RENDERIZADO PRINCIPAL CONCURRENTE ---
 document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('cisternsGrid');
     const now = new Date();
@@ -115,23 +109,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
-    for (const id of Object.keys(APP_CONFIG.GEOMETRY)) {
-        const geo = APP_CONFIG.GEOMETRY[id];
-        if (!geo.sensor_id) continue;
+    const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY).filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null);
 
+    const promises = activeCisternKeys.map(async (id) => {
+        const geo = APP_CONFIG.GEOMETRY[id];
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
         
+        // Ejecutamos nivel (histórico 5 días) y batería (último punto rápido) en paralelo
         const [apiRawData, batteryVal] = await Promise.all([
             fetchHistoricalData(token),
-            fetchBatteryData(token)
+            fetchLatestBattery(token)
         ]);
 
+        return { id, geo, apiRawData, batteryVal };
+    });
+
+    const results = await Promise.all(promises);
+
+    for (const res of results) {
+        const { id, geo, apiRawData, batteryVal } = res;
         const series = processApiData(apiRawData, geo);
         const batteryText = batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A';
-        
+        const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
+
         if (!series.valid) {
-            container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos del sensor en 5 días</div></div>`;
-            telegramCaption += `*[${geo.name}](https://maps.google.com/?q=${geo.lat},${geo.lng})*\n⚠️ Sensor sin datos recientes.\n\n`;
+            container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos recientes</div></div>`;
+            telegramCaption += `*[${geo.name}](${mapsUrl})*\n⚠️ Sensor sin datos recientes.\n\n`;
             continue;
         }
 
@@ -149,7 +152,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const currentVol = calcVolume(currentDist, geo);
         const prevVol = calcVolume(prevDist, geo);
-
         const flowL = currentVol.liters - prevVol.liters;
         const isPositive = flowL > 0;
         const isStable = Math.abs(flowL) < 50; 
@@ -169,9 +171,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sensorHtml = analysis.isStuck 
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
-
-        // URL de Google Maps para las coordenadas de esta cisterna
-        const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
 
         const card = document.createElement('div');
         card.className = 'cistern-card';
@@ -243,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
         
         telegramCaption += `${emojiColor} *[${geo.name}](${mapsUrl})*\n`;
-        telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | 🔋 ${batteryVal !== null ? batteryVal.toFixed(0) : 'N/A'}%\n`;
+        telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
         telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
         telegramCaption += `Autonomía est.: ${autonomyText}\n`;
         telegramCaption += `Tasa de consumo: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h\n`;
@@ -251,5 +250,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     window.telegramCaption = telegramCaption;
-    setTimeout(() => { window.dashboardReady = true; }, 2000); 
+    setTimeout(() => { window.dashboardReady = true; }, 1000); 
 });
