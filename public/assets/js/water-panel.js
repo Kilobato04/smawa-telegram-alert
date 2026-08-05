@@ -19,7 +19,7 @@ async function fetchHistoricalData(token) {
     const dtEnd = formatDateForApi(endDate);
     const dtStart = formatDateForApi(startDate);
 
-    const url = `https://smability.sidtecmx.com/SmabilityAPI/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
+    const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
 
     try {
         const response = await fetch(url);
