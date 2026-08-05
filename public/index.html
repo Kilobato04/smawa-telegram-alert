@@ -1,1 +1,30 @@
-xx
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard SMAWA - Nivel de Cisternas</title>
+    <link rel="stylesheet" href="assets/css/water-panel.css">
+</head>
+<body>
+    <div class="water-dashboard-container" id="capturePanel">
+        <div class="dashboard-header">
+            <div class="header-titles">
+                <h1>Estado de Cisternas</h1>
+                <p id="updateTime">Actualizando telemetría...</p>
+            </div>
+        </div>
+
+        <div class="cisterns-grid" id="cisternsGrid">
+            <!-- Las tarjetas se inyectarán dinámicamente vía JS -->
+        </div>
+
+        <div class="dashboard-footer">
+            <p>Monitoreo automatizado SMAWA • smability.io</p>
+        </div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/water-panel.js"></script>
+</body>
+</html>
