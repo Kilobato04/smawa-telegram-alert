@@ -1,9 +1,10 @@
 // Configuración global para el frontend SMAWA
 const APP_CONFIG = {
-    API_URLS: {
-        SMAWA_A: "url_endpoint_sensor_a",
-        SMAWA_C: "url_endpoint_sensor_c",
-        SMAWA_B: "url_endpoint_sensor_b"
+    // Solo guardamos los tokens para armar las URLs dinámicamente
+    API_TOKENS: {
+        SMAWA_A: "c847d8342b77ecc9f882ddce1dc96cfe",
+        SMAWA_C: "80ce0fdb376ace3283498aff44a59851",
+        SMAWA_B: "342f54b882c7ec70b249dc9981bd47bb"
     },
     GEOMETRY: {
         "CISTERNA_A": {
@@ -35,7 +36,7 @@ const APP_CONFIG = {
         },
         "CISTERNA_D": {
             name: "Cisterna D (Chica)",
-            sensor_id: null, // Aún no instrumentada
+            sensor_id: null,
             height_m: 2.38,
             area_m2: 74.0, 
             max_capacity_l: 176120,
