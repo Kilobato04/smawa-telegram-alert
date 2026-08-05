@@ -1,1 +1,8 @@
-xx
+{
+  "name": "smawa-dashboard",
+  "version": "1.0.0",
+  "description": "Lienzo frontend para la captura de SMAWA",
+  "scripts": {
+    "start": "npx serve public"
+  }
+}
