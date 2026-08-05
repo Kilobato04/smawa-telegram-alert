@@ -1,1 +1,42 @@
-xx
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Sistema SMAWA.
+  Lambda function con Puppeteer para capturar el dashboard de agua y enviar a Telegram.
+
+Parameters:
+  PanelUrl:
+    Type: String
+    Description: URL del dashboard alojado en Netlify
+    Default: "https://tu-url-de-netlify.netlify.app"
+  S3BucketName:
+    Type: String
+    Description: Bucket de S3 para almacenamiento temporal de capturas
+    Default: "smability-water-alerts"
+  TelegramBotToken:
+    Type: String
+    Description: Token del bot de Telegram
+    NoEcho: true # Esto oculta el valor en la consola de AWS por seguridad
+  TelegramChannelId:
+    Type: String
+    Description: ID del canal de Telegram (ej. -1001234567890)
+
+Resources:
+  SmawaAlertFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SmawaAlertFunction
+      Handler: index.handler
+      Runtime: nodejs18.x
+      CodeUri: generate-alert/
+      Timeout: 60
+      MemorySize: 2048
+      Environment:
+        Variables:
+          PANEL_URL: !Ref PanelUrl
+          S3_BUCKET: !Ref S3BucketName
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          TELEGRAM_CHANNEL_ID: !Ref TelegramChannelId
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref S3BucketName
