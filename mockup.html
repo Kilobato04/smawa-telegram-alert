@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup SMAWA - Dashboard de Cisternas</title>
+    <!-- Incluimos Plotly para dibujar las sierras -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary-blue: #007acc;
+            --text-main: #333333;
+            --text-muted: #666666;
+            --alert-red: #e74c3c;
+            --ok-green: #2ecc71;
+            --border-color: #e0e0e0;
+        }
+        body {
+            margin: 0; font-family: -apple-system, sans-serif;
+            background-color: var(--bg-color); display: flex; justify-content: center; padding: 20px;
+        }
+        .dashboard { width: 600px; background: var(--bg-color); }
+        .header { background: var(--card-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 20px; color: var(--text-main); }
+        .card { background: var(--card-bg); border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 10px; }
+        .card-title h2 { margin: 0; font-size: 16px; color: var(--text-main); }
+        .card-title p { margin: 2px 0 0 0; font-size: 12px; color: var(--text-muted); }
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .metric { font-size: 14px; }
+        .metric-val { font-size: 20px; font-weight: bold; color: var(--primary-blue); }
+        .metric-m3 { font-size: 14px; color: var(--text-muted); font-weight: normal; }
+        .flow-status { font-weight: bold; margin-top: 5px; }
+        .flow-negative { color: var(--alert-red); }
+        .flow-positive { color: var(--ok-green); }
+        .chart-container { width: 100%; height: 150px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard" id="capturePanel">
+        <div class="header">
+            <h1>Estado de Red de Cisternas SMAWA</h1>
+            <p id="updateTime" style="margin: 5px 0 0 0; font-size: 12px; color: #666;"></p>
+        </div>
+        <div id="cisternsContainer"></div>
+    </div>
+
+    <script>
+        // 1. Diccionario Maestro de Geometrías (Las fijas que validamos)
+        const GEOMETRY = {
+            "CISTERNA_A": { name: "Cisterna A (Potable 1/2)", height_m: 2.90, area_m2: 400.0, max_l: 1160000, color: '#007acc' },
+            "CISTERNA_C": { name: "Cisterna C (Potable 2/2)", height_m: 2.90, area_m2: 400.0, max_l: 1160000, color: '#2980b9' },
+            "CISTERNA_B": { name: "Cisterna B (Aguas Negras)", height_m: 2.40, area_m2: 127.4, max_l: 305760, color: '#8e44ad' }
+        };
+
+        // 2. Generador de Mock Data (Simula la API entregando las distancias de las últimas 12 horas)
+        // Valores en metros (distancia del sensor al agua). Menor distancia = Mayor volumen.
+        const mockTimeSerie = {
+            "CISTERNA_A": [1.5, 1.4, 1.3, 1.2, 1.2, 1.25, 1.3, 1.4, 1.5, 1.8, 1.2, 1.3], // Simula consumo gradual, un pico de recarga (1.8 a 1.2) y un consumo al final
+            "CISTERNA_C": [1.5, 1.41, 1.31, 1.22, 1.21, 1.26, 1.32, 1.42, 1.51, 1.81, 1.21, 1.31], // Casi idéntica a la A por estar conectadas
+            "CISTERNA_B": [1.8, 1.7, 1.6, 1.5, 1.4, 1.2, 1.0, 0.8, 2.0, 1.9, 1.8, 1.7]  // Comportamiento distinto
+        };
+
+        // Ecuación principal del sistema
+        // V = A_{base} * (H_{total} - d)
+        function calcVolume(sensorDist, geo) {
+            const level = Math.max(0, geo.height_m - sensorDist);
+            const volumeM3 = level * geo.area_m2;
+            const volumeL = volumeM3 * 1000;
+            return { m3: volumeM3, liters: volumeL };
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('cisternsContainer');
+            const now = new Date();
+            document.getElementById('updateTime').innerText = `Actualizado: ${now.toLocaleTimeString('es-MX')} hrs`;
+
+            Object.keys(GEOMETRY).forEach(id => {
+                const geo = GEOMETRY[id];
+                const seriesDistances = mockTimeSerie[id];
+                
+                // Extraer el punto actual (último) y el anterior
+                const currentDist = seriesDistances[seriesDistances.length - 1];
+                const prevDist = seriesDistances[seriesDistances.length - 2];
+
+                const currentVol = calcVolume(currentDist, geo);
+                const prevVol = calcVolume(prevDist, geo);
+
+                // Calcular Delta Horario
+                const flowL = currentVol.liters - prevVol.liters;
+                const flowM3 = currentVol.m3 - prevVol.m3;
+                
+                const isPositive = flowL > 0;
+                const isStable = flowL === 0;
+                const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
+                const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga detectada' : 'Gasto registrado');
+                const sign = isPositive ? '+' : '';
+
+                // Crear el DOM de la Tarjeta
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-title">
+                            <h2>${geo.name}</h2>
+                            <p>Capacidad Max: ${geo.max_l.toLocaleString()} L (${(geo.max_l/1000).toLocaleString()} m³)</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="metric-val">${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                            <div class="metric-m3">${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³</div>
+                        </div>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div style="color: var(--text-muted); font-size: 12px;">Variación última hora</div>
+                            <div class="flow-status ${flowClass}">
+                                ${flowStatusText}:<br>
+                                ${sign}${flowL.toLocaleString('es-MX', {maximumFractionDigits: 0})} L 
+                                (${sign}${flowM3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)
+                            </div>
+                        </div>
+                        <div class="metric" style="text-align: right;">
+                            <div style="color: var(--text-muted); font-size: 12px;">Nivel de Llenado</div>
+                            <div style="font-size: 20px; font-weight: bold; color: ${geo.color};">
+                                ${((currentVol.liters / geo.max_l) * 100).toFixed(1)}%
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Contenedor para Plotly -->
+                    <div id="chart_${id}" class="chart-container"></div>
+                `;
+                container.appendChild(card);
+
+                // Preparar datos para la gráfica (Convertir arreglo de distancias a arreglo de Volúmenes en m3)
+                const volumeSeries = seriesDistances.map(dist => calcVolume(dist, geo).m3);
+                
+                // Dibujar la "sierra"
+                Plotly.newPlot(`chart_${id}`, [{
+                    y: volumeSeries,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: geo.color, shape: 'spline', smoothing: 0.2 },
+                    fill: 'tozeroy',
+                    fillcolor: `${geo.color}33` // Transparencia hex
+                }], {
+                    margin: { t: 10, b: 20, l: 40, r: 10 },
+                    xaxis: { showgrid: false, zeroline: false, showticklabels: false },
+                    yaxis: { 
+                        title: { text: 'Vol (m³)', font: {size: 10} }, 
+                        range: [0, geo.max_l / 1000] // Rango fijo basado en capacidad máxima
+                    },
+                    staticPlot: true // Desactiva interactividad porque será una foto
+                });
+            });
+
+            // Señal para Puppeteer
+            setTimeout(() => { window.dashboardReady = true; }, 1000); // Dar 1 seg extra a Plotly para renderizar
+        });
+    </script>
+</body>
+</html>
