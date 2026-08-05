@@ -1,85 +1,135 @@
-// --- FUNCIONES MATEMÁTICAS ---
+// --- FUNCIONES MATEMÁTICAS Y DE FECHAS ---
 function calcVolume(sensorDist, geo) {
     const level = Math.max(0, geo.height_m - sensorDist);
     const volumeM3 = level * geo.area_m2;
     return { m3: volumeM3, liters: volumeM3 * 1000 };
 }
 
-function analyzeMetrics(series, geo) {
-    let isStuck = true;
-    let totalConsumption24h = 0;
-
-    const lastVal = series.dist[series.dist.length - 1];
-    for(let i = 1; i <= 12; i++) {
-        if(series.dist[series.dist.length - i] !== lastVal) {
-            isStuck = false;
-            break;
-        }
-    }
-
-    for(let i = 1; i <= 24; i++) {
-        let idx = series.dist.length - i;
-        let diffL = calcVolume(series.dist[idx], geo).liters - calcVolume(series.dist[idx-1], geo).liters;
-        if (diffL < 0) { 
-            totalConsumption24h += Math.abs(diffL);
-        }
-    }
-    const avgHourlyConsumption = totalConsumption24h / 24;
-
-    return { isStuck, avgHourlyConsumption };
+function formatDateForApi(date) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- GENERADOR MOCK (Reemplazar con Fetch a API real) ---
-function generate5DayData(geo, simulateFailure = false) {
+// --- FETCH HISTÓRICO REAL ---
+async function fetchHistoricalData(token) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 5); // 5 días atrás
+
+    const dtEnd = formatDateForApi(endDate);
+    const dtStart = formatDateForApi(startDate);
+
+    const url = `https://smability.sidtecmx.com/SmabilityAPI/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(dtStart)}&dtEnd=${encodeURIComponent(dtEnd)}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        return data; // Array JSON
+    } catch (error) {
+        console.error("Error consultando API:", error);
+        return null;
+    }
+}
+
+// Procesa el JSON y limita los valores a la geometría física
+function processApiData(apiRawData, geo) {
     const times = [];
     const distances = [];
-    let now = new Date();
-    let currentDist = geo.height_m * 0.4; 
     
-    for (let i = 120; i >= 0; i--) {
-        let d = new Date(now.getTime() - i * 3600 * 1000);
-        times.push(d);
-        currentDist += (Math.random() * 0.03 + 0.01); 
-        if (i % 24 === 0 && i !== 120) currentDist -= (Math.random() * 0.5 + 0.3);
-        if (currentDist < 0.2) currentDist = 0.2;
-        if (currentDist > geo.height_m) currentDist = geo.height_m;
-        distances.push(currentDist);
+    if (!apiRawData || apiRawData.length === 0) return { valid: false };
+
+    apiRawData.forEach(item => {
+        let dist = parseFloat(item.Data);
+        if (!isNaN(dist)) {
+            if (dist < 0.1) dist = 0.1; // Límite inferior físico
+            if (dist > geo.height_m) dist = geo.height_m; // Límite superior físico (vacía)
+            
+            distances.push(dist);
+            times.push(new Date(item.TimeStamp));
+        }
+    });
+
+    return { x: times, dist: distances, valid: distances.length > 0 };
+}
+
+// Analiza consumos y bloqueos usando marcas de tiempo reales
+function analyzeMetrics(series, geo) {
+    const lastIdx = series.dist.length - 1;
+    const currentTime = series.x[lastIdx].getTime();
+    
+    let totalConsumption24h = 0;
+    let isStuck12h = true;
+    let prevD = null;
+    
+    const last12hStart = currentTime - 12 * 3600 * 1000;
+    const last24hStart = currentTime - 24 * 3600 * 1000;
+
+    for (let i = 0; i <= lastIdx; i++) {
+        const t = series.x[i].getTime();
+        
+        // Sumar consumos de las últimas 24h
+        if (t >= last24hStart) {
+            if (prevD !== null) {
+                let diffL = calcVolume(series.dist[i], geo).liters - calcVolume(prevD, geo).liters;
+                if (diffL < 0) totalConsumption24h += Math.abs(diffL); // Gasto real
+            }
+            prevD = series.dist[i];
+        }
+        
+        // Revisar si el sensor varió en las últimas 12h
+        if (t >= last12hStart) {
+            if (series.dist[i] !== series.dist[lastIdx]) isStuck12h = false;
+        }
     }
-    if (simulateFailure) {
-        const stuckValue = distances[distances.length - 13];
-        for(let i = 1; i <= 12; i++) distances[distances.length - i] = stuckValue;
-    }
-    return { x: times, dist: distances };
+    
+    return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
 // --- RENDERIZADO PRINCIPAL ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('cisternsGrid');
     const now = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     const formattedDate = now.toLocaleDateString('es-MX', options);
     
     document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
-
-    // Iniciar el string del caption para Telegram
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
-    Object.keys(APP_CONFIG.GEOMETRY).forEach(id => {
+    // Procesamos cada cisterna
+    for (const id of Object.keys(APP_CONFIG.GEOMETRY)) {
         const geo = APP_CONFIG.GEOMETRY[id];
-        if (!geo.sensor_id) return; // Ignoramos la Cisterna D por ahora
+        if (!geo.sensor_id) continue;
 
-        // MOCK: Aquí conectarás tu fetch real
-        const series = generate5DayData(geo, id === "CISTERNA_B");
+        const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
+        const apiRawData = await fetchHistoricalData(token);
+        const series = processApiData(apiRawData, geo);
         
-        const currentDist = series.dist[series.dist.length - 1];
-        const prevDist = series.dist[series.dist.length - 2];
+        if (!series.valid) {
+            // Manejo de error si la API no devuelve datos
+            container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos del sensor en 5 días</div></div>`;
+            telegramCaption += `*[${geo.name}](https://maps.google.com/?q=${geo.lat},${geo.lng})*\n⚠️ Sensor sin datos recientes.\n\n`;
+            continue;
+        }
+
+        const lastIdx = series.dist.length - 1;
+        const currentDist = series.dist[lastIdx];
+        const currentTime = series.x[lastIdx].getTime();
+
+        // Buscar lectura de hace 1 hora para comparar
+        let prevDist = currentDist;
+        for (let i = lastIdx; i >= 0; i--) {
+            if ((currentTime - series.x[i].getTime()) >= 3600 * 1000) {
+                prevDist = series.dist[i];
+                break;
+            }
+        }
 
         const currentVol = calcVolume(currentDist, geo);
         const prevVol = calcVolume(prevDist, geo);
 
         const flowL = currentVol.liters - prevVol.liters;
         const isPositive = flowL > 0;
-        const isStable = Math.abs(flowL) < 10; 
+        const isStable = Math.abs(flowL) < 50; // Margen de tolerancia de 50L por fluctuaciones del agua
         
         const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
         const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
@@ -97,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
-        // Construir Tarjeta HTML
         const card = document.createElement('div');
         card.className = 'cistern-card';
         card.innerHTML = `
@@ -130,14 +179,13 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         container.appendChild(card);
 
-        // Renderizar Plotly
         const volumeSeries = series.dist.map(dist => calcVolume(dist, geo).m3);
         Plotly.newPlot(`chart_${id}`, [{
             x: series.x,
             y: volumeSeries,
             type: 'scatter',
             mode: 'lines',
-            line: { color: geo.color, shape: 'spline', smoothing: 0.3, width: 2 },
+            line: { color: geo.color, shape: 'spline', smoothing: 0.2, width: 2 },
             fill: 'tozeroy',
             fillcolor: `${geo.color}22`
         }], {
@@ -147,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
             staticPlot: true
         });
 
-        // Alimentar el texto para Telegram
         const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
         const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
         const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
@@ -157,9 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
         telegramCaption += `Autonomía est.: ${autonomyText}\n`;
         telegramCaption += `Tasa de consumo: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h\n`;
         telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
-    });
+    }
 
-    // Guardar el texto en la ventana para que la Lambda lo lea
     window.telegramCaption = telegramCaption;
-    setTimeout(() => { window.dashboardReady = true; }, 1500); 
+    setTimeout(() => { window.dashboardReady = true; }, 2000); // 2 segundos para asegurar render de múltiples gráficas Plotly
 });
