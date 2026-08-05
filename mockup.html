@@ -87,7 +87,6 @@
                 distances.push(currentDist);
             }
 
-            // Simular falla de sensor en las últimas 12 horas si se requiere
             if (simulateFailure) {
                 const stuckValue = distances[distances.length - 13];
                 for(let i = 1; i <= 12; i++) {
@@ -98,12 +97,10 @@
             return { x: times, dist: distances };
         }
 
-        // Analizar datos para Autonomía y Falla
         function analyzeMetrics(series, geo) {
             let isStuck = true;
             let totalConsumption24h = 0;
 
-            // Verificar si el sensor está atascado (últimas 12 lecturas iguales)
             const lastVal = series.dist[series.dist.length - 1];
             for(let i = 1; i <= 12; i++) {
                 if(series.dist[series.dist.length - i] !== lastVal) {
@@ -112,7 +109,6 @@
                 }
             }
 
-            // Calcular consumo promedio de las últimas 24 horas (solo gastos, ignorando recargas)
             for(let i = 1; i <= 24; i++) {
                 let idx = series.dist.length - i;
                 let diffL = calcVolume(series.dist[idx], geo).liters - calcVolume(series.dist[idx-1], geo).liters;
@@ -128,7 +124,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('cisternsContainer');
             
-            // Formatear la fecha actual (Ej. Miércoles, 05 de Agosto de 2026)
             const now = new Date();
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
             const formattedDate = now.toLocaleDateString('es-MX', options);
@@ -136,7 +131,6 @@
 
             Object.keys(GEOMETRY).forEach(id => {
                 const geo = GEOMETRY[id];
-                // Forzar falla solo en Cisterna B para el mockup
                 const series = generate5DayData(geo, id === "CISTERNA_B");
                 
                 const currentDist = series.dist[series.dist.length - 1];
@@ -153,7 +147,6 @@
                 const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
                 const sign = isPositive ? '+' : '';
 
-                // Análisis Avanzado (Autonomía y Sensor)
                 const analysis = analyzeMetrics(series, geo);
                 let autonomyText = "N/A";
                 if (analysis.avgHourlyConsumption > 0) {
@@ -224,8 +217,8 @@
                     xaxis: { 
                         showgrid: true, 
                         gridcolor: '#eee',
-                        tickformat: '%d %b',
-                        tickangle: -45,
+                        tickformat: '%d/%m',
+                        tickangle: 0,
                         tickfont: { size: 9, color: '#888' }
                     },
                     yaxis: { 
