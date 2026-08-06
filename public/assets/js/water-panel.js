@@ -102,7 +102,7 @@ function analyzeMetrics(series, geo) {
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
-// Variable global para almacenar los datos de las gráficas y poder filtrarlos sin llamar a la API
+// Variable global para almacenar los datos de las gráficas
 window.chartDataStore = {};
 
 // Función para re-dibujar las gráficas según las horas seleccionadas
@@ -113,7 +113,6 @@ function updateCharts(hours) {
     Object.keys(window.chartDataStore).forEach(id => {
         const data = window.chartDataStore[id];
         
-        // Filtramos localmente los arreglos de X y Y
         const filteredX = [];
         const filteredY = [];
         
@@ -292,9 +291,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         container.appendChild(card);
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
-        
-        // Guardamos los datos localmente para poder filtrarlos con los botones
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
+
+        // === VARIABLES RESTAURADAS ===
+        const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
+        const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
+        const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
 
         telegramCaption += `${emojiColor} *[${geo.name}](${mapsUrl})*\n`;
         telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
@@ -304,17 +306,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
     }
 
-    // Dibujamos el estado inicial de las gráficas (24 Horas por defecto)
+    // Dibujamos las gráficas
     updateCharts(24);
 
-    // Eventos de click para los botones de filtros de tiempo
+    // Eventos de botones
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            // Cambio visual del botón activo
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
-            
-            // Re-dibujar gráficas
             const hrs = parseInt(e.target.getAttribute('data-hours'));
             updateCharts(hrs);
         });
