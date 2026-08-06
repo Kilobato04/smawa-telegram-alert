@@ -346,17 +346,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
-                <div>
-                    <div style="color:#666; font-size:11px;">ÚLTIMA HORA</div>
+                <div class="metric-box">
+                    <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
                     <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
                 </div>
-                <div>
-                    <div style="color:#666; font-size:11px;">PROMEDIO GASTO (24h)</div>
-                    <div>${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
+                <div class="metric-box">
+                    <div style="color:#666; font-size:11px; margin-bottom:4px;">PROMEDIO GASTO (24h)</div>
+                    <div style="font-weight:bold; color:#333;">${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
                 </div>
-                <div>
-                    <div style="color:#666; font-size:11px;">AUTONOMÍA</div>
-                    <div style="font-weight:bold;">${autonomyText}</div>
+                <div class="metric-box">
+                    <div style="color:#666; font-size:11px; margin-bottom:4px;">AUTONOMÍA</div>
+                    <div style="font-weight:bold; color:#333;">${autonomyText}</div>
                 </div>
             </div>
             <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
