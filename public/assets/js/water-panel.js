@@ -155,12 +155,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('cisternsGrid');
     const header = document.querySelector('.header');
     
-    // INYECCIÓN DE UI: Botones y sus estilos
+    // INYECCIÓN DE UI: Se agregan los botones de 4 Hrs y 2 Hrs
     const filterHtml = `
-        <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
+        <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
             <button class="filter-btn" data-hours="12">12 Hrs</button>
             <button class="filter-btn" data-hours="8">8 Hrs</button>
+            <button class="filter-btn" data-hours="4">4 Hrs</button>
+            <button class="filter-btn" data-hours="2">2 Hrs</button>
         </div>
     `;
     header.insertAdjacentHTML('afterend', filterHtml);
@@ -293,7 +295,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
 
-        // === VARIABLES RESTAURADAS ===
         const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
         const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
         const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
