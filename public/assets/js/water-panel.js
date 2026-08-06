@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </a>
                     </p>
                     <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                        📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> ${id === "CISTERNA_A" ? '<span style="color:#007acc; font-size:10px;">(Calibrada)</span>' : ''} | ${batteryText}
+                        📏 Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> ${id === "CISTERNA_A" ? '<span style="color:#007acc; font-size:10px;">(Calibrada)</span>' : ''} | ${batteryText}
                     </p>
                     <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
                         Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
