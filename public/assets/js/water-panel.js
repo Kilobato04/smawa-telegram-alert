@@ -17,7 +17,7 @@ function formatDateForApi(date) {
 async function fetchHistoricalData(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setHours(endDate.getHours() - 24); 
+    startDate.setHours(endDate.getHours() - 120); 
 
     const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
@@ -204,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const filterHtml = `
         <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
+            <button class="filter-btn" data-hours="120">5 Días</button>
             <button class="filter-btn" data-hours="12">12 Hrs</button>
             <button class="filter-btn" data-hours="8">8 Hrs</button>
             <button class="filter-btn" data-hours="4">4 Hrs</button>
