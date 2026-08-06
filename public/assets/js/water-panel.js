@@ -160,7 +160,8 @@ function updateCharts(hours) {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
                 showgrid: true, gridcolor: '#eee', 
-                tickformat: '%H:%M', tickangle: -45, 
+                tickformat: '%H:%M', tickangle: -45,
+                tickangle: 0,
                 tickfont: { size: 9, color: '#888' } 
             },
             yaxis: { 
