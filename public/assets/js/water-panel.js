@@ -179,7 +179,24 @@ function updateCharts(hours) {
 
 // --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
-    setInterval(() => { window.location.reload(); }, 3600000);
+    // --- LÓGICA DE ACTUALIZACIÓN SINCRONIZADA ---
+    console.log('⏰ Configurando actualización sincronizada...');
+    
+    function scheduleNextReload() {
+        const now = new Date();
+        // Calculamos los milisegundos exactos que faltan para el inicio de la siguiente hora
+        const msUntilNextHour = (60 - now.getMinutes()) * 60000 - (now.getSeconds() * 1000);
+        
+        console.log(`⏳ Próxima actualización en aprox ${Math.round(msUntilNextHour / 60000)} minutos.`);
+        
+        // Programamos la recarga para que ocurra exactamente en ese milisegundo
+        setTimeout(() => {
+            window.location.reload();
+        }, msUntilNextHour);
+    }
+
+    // Iniciamos el cronómetro al cargar la página
+    scheduleNextReload();
 
     const container = document.getElementById('cisternsGrid');
     const header = document.querySelector('.header');
