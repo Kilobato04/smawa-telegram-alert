@@ -89,13 +89,20 @@ function analyzeMetrics(series, geo) {
         const t = p.time.getTime();
         if (t >= last24hStart) {
             if (prevD !== null) {
-                let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
-                if (diffL < 0) totalConsumption24h += Math.abs(diffL);
+                // FILTRO DE RUIDO 24H: Solo sumar consumo si bajó más de 1.5 cm
+                if ((p.dist - prevD) > 0.015) { 
+                    let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
+                    totalConsumption24h += Math.abs(diffL);
+                    prevD = p.dist; 
+                } else if ((prevD - p.dist) > 0.015) { // Si subió más de 1.5 cm, es recarga
+                    prevD = p.dist;
+                }
+            } else {
+                prevD = p.dist;
             }
-            prevD = p.dist;
         }
         if (t >= last12hStart) {
-            if (p.dist !== validPoints[lastIdx].dist) isStuck12h = false;
+            if (Math.abs(p.dist - validPoints[lastIdx].dist) > 0.015) isStuck12h = false;
         }
     });
     
@@ -105,14 +112,12 @@ function analyzeMetrics(series, geo) {
 // Variable global para almacenar los datos de las gráficas
 window.chartDataStore = {};
 
-// Función para re-dibujar las gráficas según las horas seleccionadas
 function updateCharts(hours) {
     const nowMs = new Date().getTime();
     const startMs = nowMs - (hours * 3600 * 1000);
 
     Object.keys(window.chartDataStore).forEach(id => {
         const data = window.chartDataStore[id];
-        
         const filteredX = [];
         const filteredY = [];
         
@@ -148,14 +153,11 @@ function updateCharts(hours) {
 
 // --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
-    
-    // Auto-refresh cada 1 hora
     setInterval(() => { window.location.reload(); }, 3600000);
 
     const container = document.getElementById('cisternsGrid');
     const header = document.querySelector('.header');
     
-    // INYECCIÓN DE UI: Se agregan los botones de 4 Hrs y 2 Hrs
     const filterHtml = `
         <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
@@ -223,13 +225,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const currentVol = calcVolume(currentDist, geo);
         const prevVol = calcVolume(prevDist, geo);
-        const flowL = currentVol.liters - prevVol.liters;
+        
+        let rawFlowL = currentVol.liters - prevVol.liters;
+        
+        // FILTRO DE RUIDO ÚLTIMA HORA: 
+        // Si el nivel cambió 1.5 cm o menos (0.015 m), lo consideramos "Estable" y forzamos el flujo a 0L.
+        const isStable = Math.abs(currentDist - prevDist) <= 0.015; 
+        
+        const flowL = isStable ? 0 : rawFlowL;
         const isPositive = flowL > 0;
-        const isStable = Math.abs(flowL) < 50; 
         
         const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
         const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
-        const sign = isPositive ? '+' : '';
+        const sign = isPositive && !isStable ? '+' : '';
         const fillPercentage = ((currentVol.liters / geo.max_capacity_l) * 100).toFixed(1);
 
         const analysis = analyzeMetrics(series, geo);
@@ -277,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
                 <div>
                     <div style="color:#666; font-size:11px;">ÚLTIMA HORA</div>
-                    <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${flowL.toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                    <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
                 </div>
                 <div>
                     <div style="color:#666; font-size:11px;">PROMEDIO (24h)</div>
@@ -307,10 +315,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
     }
 
-    // Dibujamos las gráficas
     updateCharts(24);
 
-    // Eventos de botones
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
