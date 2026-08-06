@@ -1,7 +1,10 @@
 // --- FUNCIONES MATEMÁTICAS Y DE FECHAS ---
 function calcVolume(sensorDist, geo) {
-    const level = Math.max(0, geo.height_m - sensorDist);
+    // Al ser PIEZÓMETRO, la lectura (sensorDist) es directamente el NIVEL de agua.
+    // Usamos Math.min para topar el cálculo a la altura máxima de la cisterna en caso de picos de ruido en el sensor.
+    const level = Math.min(sensorDist, geo.height_m); 
     const volumeM3 = level * geo.area_m2;
+    
     return { m3: volumeM3, liters: volumeM3 * 1000 };
 }
 
