@@ -137,6 +137,11 @@ function updateCharts(hours) {
     const nowMs = new Date().getTime();
     const startMs = nowMs - (hours * 3600 * 1000);
 
+    // --- NUEVA LÓGICA DE FORMATO DE FECHA ---
+    // Si son más de 24 horas, mostramos "Día/Mes Hora:Min" (ej. 06/08 14:00)
+    // Si son 24 horas o menos, mostramos solo "Hora:Min" (ej. 14:00)
+    const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
+
     Object.keys(window.chartDataStore).forEach(id => {
         const data = window.chartDataStore[id];
         const filteredX = [];
@@ -155,7 +160,7 @@ function updateCharts(hours) {
             y: filteredY,
             type: 'scatter',
             mode: 'lines',
-            connectgaps: false, // Rompe la línea en los valores nulos (vacíos de red)
+            connectgaps: false, 
             line: { color: data.geo.color, width: 2 },
             fill: 'tozeroy',
             fillcolor: `${data.geo.color}22`
@@ -163,8 +168,8 @@ function updateCharts(hours) {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
                 showgrid: true, gridcolor: '#eee', 
-                tickformat: '%H:%M', tickangle: -45,
-                tickangle: 0,
+                tickformat: xAxisFormat,  // <--- Aplicamos el formato dinámico
+                tickangle: 0, 
                 tickfont: { size: 9, color: '#888' } 
             },
             yaxis: { 
@@ -203,8 +208,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const filterHtml = `
         <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
-            <button class="filter-btn active" data-hours="24">24 Hrs</button>
             <button class="filter-btn" data-hours="120">5 Días</button>
+            <button class="filter-btn active" data-hours="24">24 Hrs</button>
             <button class="filter-btn" data-hours="12">12 Hrs</button>
             <button class="filter-btn" data-hours="8">8 Hrs</button>
             <button class="filter-btn" data-hours="4">4 Hrs</button>
