@@ -53,19 +53,37 @@ function processApiData(apiRawData, geo, cisternId) {
     
     if (!apiRawData || apiRawData.length === 0) return { valid: false };
 
+    let lastTime = null;
+    // Límite de tiempo: Si no hay datos en 15 minutos, rompe la línea en la gráfica
+    const MAX_GAP_MS = 15 * 60 * 1000; 
+
     apiRawData.forEach(item => {
         let rawDist = parseFloat(item.Data);
         let currentTime = new Date(item.TimeStamp);
 
         if (!isNaN(rawDist)) {
             let dist = rawDist;
+            
+            // --- NUEVA ECUACIÓN DE CALIBRACIÓN IDEAL ---
             if (cisternId === "CISTERNA_A") {
-                dist = (rawDist + 0.3) * (5 / 5.09);
+                dist = (rawDist * 0.8478) + 0.5709;
             }
+            
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
+
+            // Lógica para detectar vacíos de conexión (Inyección de null)
+            if (lastTime !== null) {
+                let diff = currentTime.getTime() - lastTime.getTime();
+                if (diff > MAX_GAP_MS) {
+                    times.push(new Date(lastTime.getTime() + 1000)); 
+                    distances.push(null); // Obliga a Plotly a romper el trazo
+                }
+            }
+
             distances.push(dist);
             times.push(currentTime);
+            lastTime = currentTime;
         }
     });
     return { x: times, dist: distances, valid: distances.length > 0 };
@@ -89,12 +107,12 @@ function analyzeMetrics(series, geo) {
         const t = p.time.getTime();
         if (t >= last24hStart) {
             if (prevD !== null) {
-                // FILTRO DE RUIDO 24H: Solo sumar consumo si bajó más de 1.5 cm
+                // FILTRO DE RUIDO: Tolerar variaciones menores a 1.5 cm
                 if ((p.dist - prevD) > 0.015) { 
                     let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
                     totalConsumption24h += Math.abs(diffL);
                     prevD = p.dist; 
-                } else if ((prevD - p.dist) > 0.015) { // Si subió más de 1.5 cm, es recarga
+                } else if ((prevD - p.dist) > 0.015) { 
                     prevD = p.dist;
                 }
             } else {
@@ -128,12 +146,16 @@ function updateCharts(hours) {
             }
         }
 
+        // --- ACTUALIZACIÓN DE GRÁFICA A LÍNEAS ---
         Plotly.newPlot(`chart_${id}`, [{
             x: filteredX,
             y: filteredY,
-            type: 'bar',
-            marker: { color: data.geo.color },
-            width: 1000 * 60 * 4 
+            type: 'scatter',
+            mode: 'lines',
+            connectgaps: false, // Rompe la línea en los valores nulos (vacíos de red)
+            line: { color: data.geo.color, width: 2 },
+            fill: 'tozeroy',
+            fillcolor: `${data.geo.color}22`
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
@@ -208,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             continue;
         }
 
+        // Buscar el último índice válido (ignorando los huecos de la gráfica)
         let lastValidIdx = series.dist.length - 1;
         while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) { lastValidIdx--; }
         if (lastValidIdx < 0) continue;
@@ -228,8 +251,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         let rawFlowL = currentVol.liters - prevVol.liters;
         
-        // FILTRO DE RUIDO ÚLTIMA HORA: 
-        // Si el nivel cambió 1.5 cm o menos (0.015 m), lo consideramos "Estable" y forzamos el flujo a 0L.
         const isStable = Math.abs(currentDist - prevDist) <= 0.015; 
         
         const flowL = isStable ? 0 : rawFlowL;
