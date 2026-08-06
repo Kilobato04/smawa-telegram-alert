@@ -243,30 +243,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         
-        // GRÁFICA AJUSTADA A HISTOGRAMA (BARRAS)
+        // GRÁFICA AJUSTADA A HISTOGRAMA (BARRAS) CON AUTO-SCALE Y ANCHO HOMOLOGADO
         Plotly.newPlot(`chart_${id}`, [{
             x: series.x,
             y: volumeSeries,
-            type: 'bar', // Renderiza barras independientes por cada timestamp
-            marker: { color: geo.color }
+            type: 'bar',
+            marker: { color: geo.color },
+            width: 1000 * 60 * 4 // Fuerza el ancho exacto de 4 minutos (240,000 ms) para alinear todas las gráficas
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
                 showgrid: true, 
                 gridcolor: '#eee', 
-                tickformat: '%H:%M', // Muestra solo horas y minutos para ventana de 24h
+                tickformat: '%H:%M', 
                 tickangle: -45, 
                 tickfont: { size: 9, color: '#888' } 
             },
             yaxis: { 
                 title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
-                range: [0, geo.max_capacity_l / 1000], 
+                autorange: true, // Deja que Plotly escale automáticamente la altura según los datos
                 showgrid: true, 
                 gridcolor: '#eee', 
                 tickfont: { size: 9, color: '#888' } 
             },
-            staticPlot: true,
-            bargap: 0.1 // Pequeña separación entre barras para mayor claridad visual
+            staticPlot: true
+            // Eliminamos 'bargap' porque el 'width' temporal ya controla el espaciado
         });
 
         const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
