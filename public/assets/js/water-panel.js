@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
                 </div>
                 <div>
-                    <div style="color:#666; font-size:11px;">PROMEDIO (24h)</div>
+                    <div style="color:#666; font-size:11px;">PROMEDIO GASTO (24h)</div>
                     <div>${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
                 </div>
                 <div>
