@@ -10,11 +10,11 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- FETCH HISTÓRICO ÚNICO (NIVEL) ---
+// --- FETCH HISTÓRICO (AJUSTADO A 24 HORAS) ---
 async function fetchHistoricalData(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 5); 
+    startDate.setHours(endDate.getHours() - 24); // Reducido a las últimas 24 horas
 
     const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
@@ -47,23 +47,21 @@ async function fetchLatestBattery(token) {
     }
 }
 
-// Procesa el JSON, aplica calibración si es Cisterna A, detecta huecos de tiempo e inyecta nulls
+// Procesa el JSON, aplica calibración punto por punto a Cisterna A
 function processApiData(apiRawData, geo, cisternId) {
     const times = [];
     const distances = [];
     
     if (!apiRawData || apiRawData.length === 0) return { valid: false };
 
-    let lastTime = null;
-    const MAX_GAP_MS = 3 * 3600 * 1000; // 3 horas sin datos rompe la línea
-
     apiRawData.forEach(item => {
         let rawDist = parseFloat(item.Data);
         let currentTime = new Date(item.TimeStamp);
 
         if (!isNaN(rawDist)) {
-            // Aplicar Ecuación de Calibración si es la Cisterna A (Vasos comunicantes con C)
             let dist = rawDist;
+            
+            // LOGICA DE CALIBRACIÓN: Aplicada individualmente a cada punto de tiempo
             if (cisternId === "CISTERNA_A") {
                 dist = (rawDist + 0.3) * (5 / 5.09);
             }
@@ -71,17 +69,8 @@ function processApiData(apiRawData, geo, cisternId) {
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
 
-            if (lastTime !== null) {
-                let diff = currentTime.getTime() - lastTime.getTime();
-                if (diff > MAX_GAP_MS) {
-                    times.push(new Date(lastTime.getTime() + 1000));
-                    distances.push(null);
-                }
-            }
-
             distances.push(dist);
             times.push(currentTime);
-            lastTime = currentTime;
         }
     });
 
@@ -119,8 +108,14 @@ function analyzeMetrics(series, geo) {
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
-// --- RENDERIZADO PRINCIPAL CONCURRENTE ---
+// --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
+    
+    // LOGICA DE AUTO-REFRESH: Recargar la página automáticamente cada hora (3,600,000 ms)
+    setInterval(() => {
+        window.location.reload();
+    }, 3600000);
+
     const container = document.getElementById('cisternsGrid');
     const now = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -147,7 +142,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     for (const res of results) {
         const { id, geo, apiRawData, batteryVal } = res;
-        // Pasamos el identificador 'id' para que processApiData sepa si debe aplicar la calibración de la Cisterna A
         const series = processApiData(apiRawData, geo, id);
         const batteryText = batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A';
         const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
@@ -249,20 +243,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         
+        // GRÁFICA AJUSTADA A HISTOGRAMA (BARRAS)
         Plotly.newPlot(`chart_${id}`, [{
             x: series.x,
             y: volumeSeries,
-            type: 'scatter',
-            mode: 'lines',
-            connectgaps: false,
-            line: { color: geo.color, shape: 'spline', smoothing: 0.2, width: 2 },
-            fill: 'tozeroy',
-            fillcolor: `${geo.color}22`
+            type: 'bar', // Renderiza barras independientes por cada timestamp
+            marker: { color: geo.color }
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
-            xaxis: { showgrid: true, gridcolor: '#eee', tickformat: '%d/%m', tickangle: 0, tickfont: { size: 9, color: '#888' } },
-            yaxis: { title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, range: [0, geo.max_capacity_l / 1000], showgrid: true, gridcolor: '#eee', tickfont: { size: 9, color: '#888' } },
-            staticPlot: true
+            xaxis: { 
+                showgrid: true, 
+                gridcolor: '#eee', 
+                tickformat: '%H:%M', // Muestra solo horas y minutos para ventana de 24h
+                tickangle: -45, 
+                tickfont: { size: 9, color: '#888' } 
+            },
+            yaxis: { 
+                title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
+                range: [0, geo.max_capacity_l / 1000], 
+                showgrid: true, 
+                gridcolor: '#eee', 
+                tickfont: { size: 9, color: '#888' } 
+            },
+            staticPlot: true,
+            bargap: 0.1 // Pequeña separación entre barras para mayor claridad visual
         });
 
         const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
