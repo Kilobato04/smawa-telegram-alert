@@ -136,10 +136,6 @@ window.chartDataStore = {};
 function updateCharts(hours) {
     const nowMs = new Date().getTime();
     const startMs = nowMs - (hours * 3600 * 1000);
-
-    // --- NUEVA LÓGICA DE FORMATO DE FECHA ---
-    // Si son más de 24 horas, mostramos "Día/Mes Hora:Min" (ej. 06/08 14:00)
-    // Si son 24 horas o menos, mostramos solo "Hora:Min" (ej. 14:00)
     const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
 
     Object.keys(window.chartDataStore).forEach(id => {
@@ -147,12 +143,29 @@ function updateCharts(hours) {
         const filteredX = [];
         const filteredY = [];
         
+        let minY = Infinity;
+        let maxY = -Infinity;
+        
         for(let i = 0; i < data.x.length; i++) {
             if(data.x[i].getTime() >= startMs) {
                 filteredX.push(data.x[i]);
                 filteredY.push(data.y[i]);
+                
+                // Buscamos el mínimo y máximo real para encuadrar la sierra
+                if (data.y[i] !== null) {
+                    if (data.y[i] < minY) minY = data.y[i];
+                    if (data.y[i] > maxY) maxY = data.y[i];
+                }
             }
         }
+
+        // Si la cisterna no tiene datos en este periodo, evitamos errores matemáticos
+        if (minY === Infinity) { minY = 0; maxY = 10; }
+
+        // Calculamos un margen del 5% arriba y abajo para que la curva no toque los bordes
+        const rangeDiff = maxY - minY;
+        const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
+        const yRange = [Math.max(0, minY - padding), maxY + padding];
 
         // --- ACTUALIZACIÓN DE GRÁFICA A LÍNEAS ---
         Plotly.newPlot(`chart_${id}`, [{
@@ -167,14 +180,16 @@ function updateCharts(hours) {
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
+                range: [new Date(startMs), new Date(nowMs)], // <--- FIX 1: Eje X anclado a la ventana de tiempo real
                 showgrid: true, gridcolor: '#eee', 
-                tickformat: xAxisFormat,  // <--- Aplicamos el formato dinámico
+                tickformat: xAxisFormat,
                 tickangle: 0, 
                 tickfont: { size: 9, color: '#888' } 
             },
             yaxis: { 
+                range: yRange, // <--- FIX 2: Eje Y encuadrado dinámicamente en los datos (Zoom automático)
                 title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
-                autorange: true, showgrid: true, gridcolor: '#eee', 
+                showgrid: true, gridcolor: '#eee', 
                 tickfont: { size: 9, color: '#888' } 
             },
             staticPlot: true
