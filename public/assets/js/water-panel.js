@@ -10,11 +10,11 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- FETCH HISTÓRICO (AJUSTADO A 24 HORAS) ---
+// --- FETCH HISTÓRICO ---
 async function fetchHistoricalData(token) {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setHours(endDate.getHours() - 24); // Reducido a las últimas 24 horas
+    startDate.setHours(endDate.getHours() - 24); 
 
     const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
@@ -47,7 +47,6 @@ async function fetchLatestBattery(token) {
     }
 }
 
-// Procesa el JSON, aplica calibración punto por punto a Cisterna A
 function processApiData(apiRawData, geo, cisternId) {
     const times = [];
     const distances = [];
@@ -60,20 +59,15 @@ function processApiData(apiRawData, geo, cisternId) {
 
         if (!isNaN(rawDist)) {
             let dist = rawDist;
-            
-            // LOGICA DE CALIBRACIÓN: Aplicada individualmente a cada punto de tiempo
             if (cisternId === "CISTERNA_A") {
                 dist = (rawDist + 0.3) * (5 / 5.09);
             }
-
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
-
             distances.push(dist);
             times.push(currentTime);
         }
     });
-
     return { x: times, dist: distances, valid: distances.length > 0 };
 }
 
@@ -108,15 +102,79 @@ function analyzeMetrics(series, geo) {
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
+// Variable global para almacenar los datos de las gráficas y poder filtrarlos sin llamar a la API
+window.chartDataStore = {};
+
+// Función para re-dibujar las gráficas según las horas seleccionadas
+function updateCharts(hours) {
+    const nowMs = new Date().getTime();
+    const startMs = nowMs - (hours * 3600 * 1000);
+
+    Object.keys(window.chartDataStore).forEach(id => {
+        const data = window.chartDataStore[id];
+        
+        // Filtramos localmente los arreglos de X y Y
+        const filteredX = [];
+        const filteredY = [];
+        
+        for(let i = 0; i < data.x.length; i++) {
+            if(data.x[i].getTime() >= startMs) {
+                filteredX.push(data.x[i]);
+                filteredY.push(data.y[i]);
+            }
+        }
+
+        Plotly.newPlot(`chart_${id}`, [{
+            x: filteredX,
+            y: filteredY,
+            type: 'bar',
+            marker: { color: data.geo.color },
+            width: 1000 * 60 * 4 
+        }], {
+            margin: { t: 10, b: 25, l: 40, r: 10 },
+            xaxis: { 
+                showgrid: true, gridcolor: '#eee', 
+                tickformat: '%H:%M', tickangle: -45, 
+                tickfont: { size: 9, color: '#888' } 
+            },
+            yaxis: { 
+                title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
+                autorange: true, showgrid: true, gridcolor: '#eee', 
+                tickfont: { size: 9, color: '#888' } 
+            },
+            staticPlot: true
+        });
+    });
+}
+
 // --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // LOGICA DE AUTO-REFRESH: Recargar la página automáticamente cada hora (3,600,000 ms)
-    setInterval(() => {
-        window.location.reload();
-    }, 3600000);
+    // Auto-refresh cada 1 hora
+    setInterval(() => { window.location.reload(); }, 3600000);
 
     const container = document.getElementById('cisternsGrid');
+    const header = document.querySelector('.header');
+    
+    // INYECCIÓN DE UI: Botones y sus estilos
+    const filterHtml = `
+        <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
+            <button class="filter-btn active" data-hours="24">24 Hrs</button>
+            <button class="filter-btn" data-hours="12">12 Hrs</button>
+            <button class="filter-btn" data-hours="8">8 Hrs</button>
+        </div>
+    `;
+    header.insertAdjacentHTML('afterend', filterHtml);
+
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .filter-btn { padding: 6px 15px; border: 1px solid #007acc; background: white; color: #007acc; border-radius: 15px; cursor: pointer; font-size: 13px; font-weight: bold; transition: all 0.2s; outline: none;}
+        .filter-btn.active { background: #007acc; color: white; }
+        .filter-btn:hover { background: #e6f2ff; }
+        .filter-btn.active:hover { background: #005999; }
+    `;
+    document.head.appendChild(style);
+
     const now = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     const formattedDate = now.toLocaleDateString('es-MX', options);
@@ -129,12 +187,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const promises = activeCisternKeys.map(async (id) => {
         const geo = APP_CONFIG.GEOMETRY[id];
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
-        
-        const [apiRawData, batteryVal] = await Promise.all([
-            fetchHistoricalData(token),
-            fetchLatestBattery(token)
-        ]);
-
+        const [apiRawData, batteryVal] = await Promise.all([ fetchHistoricalData(token), fetchLatestBattery(token) ]);
         return { id, geo, apiRawData, batteryVal };
     });
 
@@ -153,10 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         let lastValidIdx = series.dist.length - 1;
-        while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) {
-            lastValidIdx--;
-        }
-        
+        while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) { lastValidIdx--; }
         if (lastValidIdx < 0) continue;
 
         const currentDist = series.dist[lastValidIdx];
@@ -243,37 +293,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         
-        // GRÁFICA AJUSTADA A HISTOGRAMA (BARRAS) CON AUTO-SCALE Y ANCHO HOMOLOGADO
-        Plotly.newPlot(`chart_${id}`, [{
-            x: series.x,
-            y: volumeSeries,
-            type: 'bar',
-            marker: { color: geo.color },
-            width: 1000 * 60 * 4 // Fuerza el ancho exacto de 4 minutos (240,000 ms) para alinear todas las gráficas
-        }], {
-            margin: { t: 10, b: 25, l: 40, r: 10 },
-            xaxis: { 
-                showgrid: true, 
-                gridcolor: '#eee', 
-                tickformat: '%H:%M', 
-                tickangle: -45, 
-                tickfont: { size: 9, color: '#888' } 
-            },
-            yaxis: { 
-                title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
-                autorange: true, // Deja que Plotly escale automáticamente la altura según los datos
-                showgrid: true, 
-                gridcolor: '#eee', 
-                tickfont: { size: 9, color: '#888' } 
-            },
-            staticPlot: true
-            // Eliminamos 'bargap' porque el 'width' temporal ya controla el espaciado
-        });
+        // Guardamos los datos localmente para poder filtrarlos con los botones
+        window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
 
-        const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
-        const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
-        const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
-        
         telegramCaption += `${emojiColor} *[${geo.name}](${mapsUrl})*\n`;
         telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
         telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
@@ -281,6 +303,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         telegramCaption += `Tasa de consumo: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h\n`;
         telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
     }
+
+    // Dibujamos el estado inicial de las gráficas (24 Horas por defecto)
+    updateCharts(24);
+
+    // Eventos de click para los botones de filtros de tiempo
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            // Cambio visual del botón activo
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            // Re-dibujar gráficas
+            const hrs = parseInt(e.target.getAttribute('data-hours'));
+            updateCharts(hrs);
+        });
+    });
 
     window.telegramCaption = telegramCaption;
     setTimeout(() => { window.dashboardReady = true; }, 1000); 
