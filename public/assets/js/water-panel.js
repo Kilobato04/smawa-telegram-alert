@@ -330,11 +330,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
-        // --- CÁLCULO MONETARIO (Cisterna C) ---
-        // Valor configurable: Ej. $55 MXN por cada metro cúbico (1000 Litros)
-        const TARIFA_AGUA_M3 = 55.00; 
+        // --- CÁLCULO MONETARIO ---
+        // Sugerencia: Usar un promedio blended entre red SACMEX y Piperos
+        const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
-        const costoPorHoraMXN = analysis.avgHourlyConsumption * costoPorLitro;
+        // Aplicamos Math.round para quitar centavos y dejar números enteros
+        const costoPorHoraMXN = Math.round(analysis.avgHourlyConsumption * costoPorLitro);
+
+        // Lógica condicional: Si es Aguas Negras (CISTERNA_B), ocultamos la etiqueta de dinero
+        const moneyHtml = id !== 'CISTERNA_B' 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
+            : ``;
 
         const card = document.createElement('div');
         card.className = 'cistern-card';
@@ -357,7 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
             `;
         } else {
-            // VISTA CISTERNA C (Y Aguas Negras): Completa con finanzas
+            // VISTA CISTERNA C (Y Aguas Negras): Completa con finanzas opcionales
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
@@ -393,7 +399,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">PROMEDIO GASTO (24h)</div>
                         <div style="font-weight:bold; color:#333;">${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
-                        <div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX', {maximumFractionDigits: 2})} MXN/h)</div>
+                        ${moneyHtml}
                     </div>
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">AUTONOMÍA</div>
@@ -416,12 +422,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
             const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
             const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
+            
+            // Si no es CISTERNA_B, agregamos el texto del costo redondeado
+            const telegramMoneyText = id !== 'CISTERNA_B' ? ` (~$${costoPorHoraMXN.toLocaleString('es-MX')} MXN)` : '';
 
             telegramCaption += `${emojiColor} *[${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}]*\n`;
             telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
             telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
             telegramCaption += `Autonomía est.: ${autonomyText}\n`;
-            telegramCaption += `Tasa de gasto: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h (~$${costoPorHoraMXN.toLocaleString('es-MX', {maximumFractionDigits: 2})} MXN)\n`;
+            telegramCaption += `Tasa de gasto: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h${telegramMoneyText}\n`;
             telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
         }
     }
