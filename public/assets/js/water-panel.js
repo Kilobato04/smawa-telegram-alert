@@ -146,15 +146,22 @@ function updateCharts(hours) {
         let minY = Infinity;
         let maxY = -Infinity;
         
+        // --- NUEVO: Multiplicador dinámico ---
+        // Si es la Cisterna C, multiplicamos sus valores de gráfica por 2
+        const multiplier = (id === 'CISTERNA_C') ? 2 : 1;
+        
         for(let i = 0; i < data.x.length; i++) {
             if(data.x[i].getTime() >= startMs) {
                 filteredX.push(data.x[i]);
-                filteredY.push(data.y[i]);
                 
-                // Buscamos el mínimo y máximo real para encuadrar la sierra
-                if (data.y[i] !== null) {
-                    if (data.y[i] < minY) minY = data.y[i];
-                    if (data.y[i] > maxY) maxY = data.y[i];
+                // Extraemos el valor Y (m3) y lo multiplicamos si corresponde
+                const valY = data.y[i] !== null ? (data.y[i] * multiplier) : null;
+                filteredY.push(valY);
+                
+                // Buscamos el mínimo y máximo usando el valor ya multiplicado
+                if (valY !== null) {
+                    if (valY < minY) minY = valY;
+                    if (valY > maxY) maxY = valY;
                 }
             }
         }
@@ -162,7 +169,7 @@ function updateCharts(hours) {
         // Si la cisterna no tiene datos en este periodo, evitamos errores matemáticos
         if (minY === Infinity) { minY = 0; maxY = 10; }
 
-        // Calculamos un margen del 5% arriba y abajo para que la curva no toque los bordes
+        // Calculamos un margen del 5% arriba y abajo para que la curva respire
         const rangeDiff = maxY - minY;
         const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
         const yRange = [Math.max(0, minY - padding), maxY + padding];
@@ -180,14 +187,14 @@ function updateCharts(hours) {
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
-                range: [new Date(startMs), new Date(nowMs)], // <--- FIX 1: Eje X anclado a la ventana de tiempo real
+                range: [new Date(startMs), new Date(nowMs)], 
                 showgrid: true, gridcolor: '#eee', 
                 tickformat: xAxisFormat,
                 tickangle: 0, 
                 tickfont: { size: 9, color: '#888' } 
             },
             yaxis: { 
-                range: yRange, // <--- FIX 2: Eje Y encuadrado dinámicamente en los datos (Zoom automático)
+                range: yRange, 
                 title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
                 showgrid: true, gridcolor: '#eee', 
                 tickfont: { size: 9, color: '#888' } 
