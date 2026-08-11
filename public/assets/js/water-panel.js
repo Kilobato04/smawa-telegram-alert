@@ -341,11 +341,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Lógica condicional: Ocultamos el dinero si es Aguas Negras (CISTERNA_B)
         const moneyHtmlPromedio = id !== 'CISTERNA_B' 
-            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">($${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
             : ``;
             
         const moneyHtmlUltimaHora = id !== 'CISTERNA_B' 
-            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)</div>` 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">($${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)</div>` 
             : ``;
 
         const card = document.createElement('div');
