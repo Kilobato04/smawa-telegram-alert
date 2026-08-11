@@ -249,7 +249,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
-    const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY).filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null);
+    // Extraer y ordenar las cisternas: Forzamos a que CISTERNA_C siempre sea la primera
+    const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY)
+        .filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null)
+        .sort((a, b) => {
+            if (a === 'CISTERNA_C') return -1;
+            if (b === 'CISTERNA_C') return 1;
+            return 0;
+        });
 
     const promises = activeCisternKeys.map(async (id) => {
         const geo = APP_CONFIG.GEOMETRY[id];
@@ -292,18 +299,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const prevVol = calcVolume(prevDist, geo);
         
         let rawFlowL = currentVol.liters - prevVol.liters;
-        
         const isStable = Math.abs(currentDist - prevDist) <= 0.015; 
         
+        const analysis = analyzeMetrics(series, geo);
+
+        // --- NUEVA LÓGICA DE NEGOCIO: CONSOLIDACIÓN EN CISTERNA C ---
+        if (id === 'CISTERNA_C') {
+            // Multiplicamos por 2 para representar el vaso completo
+            currentVol.liters *= 2;
+            currentVol.m3 *= 2;
+            rawFlowL *= 2;
+            analysis.avgHourlyConsumption *= 2;
+            geo.max_capacity_l *= 2; // Duplicamos capacidad base para que el % sea correcto
+        }
+
         const flowL = isStable ? 0 : rawFlowL;
         const isPositive = flowL > 0;
-        
         const flowClass = isStable ? '' : (isPositive ? 'flow-positive' : 'flow-negative');
         const flowStatusText = isStable ? 'Estable' : (isPositive ? 'Recarga' : 'Gasto');
         const sign = isPositive && !isStable ? '+' : '';
         const fillPercentage = ((currentVol.liters / geo.max_capacity_l) * 100).toFixed(1);
 
-        const analysis = analyzeMetrics(series, geo);
         let autonomyText = "N/A";
         if (analysis.avgHourlyConsumption > 0) {
             const daysLeft = currentVol.liters / (analysis.avgHourlyConsumption * 24);
@@ -314,68 +330,100 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
+        // --- CÁLCULO MONETARIO (Cisterna C) ---
+        // Valor configurable: Ej. $55 MXN por cada metro cúbico (1000 Litros)
+        const TARIFA_AGUA_M3 = 55.00; 
+        const costoPorLitro = TARIFA_AGUA_M3 / 1000;
+        const costoPorHoraMXN = analysis.avgHourlyConsumption * costoPorLitro;
+
         const card = document.createElement('div');
         card.className = 'cistern-card';
-        card.innerHTML = `
-            <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
-                <div>
-                    <h2 class="cistern-name" style="margin:0; font-size:16px;">${geo.name}</h2>
-                    <p style="margin:3px 0; font-size:11px;">
-                        <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">
-                            📍 ${geo.lat}, ${geo.lng} ↗
-                        </a>
-                    </p>
-                    <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                        📏 Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> ${id === "CISTERNA_A" ? '<span style="color:#007acc; font-size:10px;">(Calibrada)</span>' : ''} | ${batteryText}
-                    </p>
-                    <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                        Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
-                    </p>
-                </div>
-                <div style="text-align: right;">
-                    <div class="volume-display" style="font-size:20px; font-weight:bold; color:#007acc;">
-                        ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L
-                    </div>
-                    <div style="font-size: 13px; color: #666;">
-                        ${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³
-                    </div>
-                    <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
-                        ${fillPercentage}% Lleno
+        
+        // --- RENDERIZADO CONDICIONAL DE TARJETAS ---
+        if (id === 'CISTERNA_A') {
+            // VISTA CISTERNA A: Simplificada (Solo espejo de agua y gráfica)
+            card.innerHTML = `
+                <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
+                    <div>
+                        <h2 class="cistern-name" style="margin:0; font-size:16px;">${geo.name} (Sonda de Control)</h2>
+                        <p style="margin:3px 0; font-size:11px;">
+                            <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">📍 ${geo.lat}, ${geo.lng} ↗</a>
+                        </p>
+                        <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
+                            📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
+                        </p>
                     </div>
                 </div>
-            </div>
-            
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
-                <div class="metric-box">
-                    <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
-                    <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
+            `;
+        } else {
+            // VISTA CISTERNA C (Y Aguas Negras): Completa con finanzas
+            card.innerHTML = `
+                <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
+                    <div>
+                        <h2 class="cistern-name" style="margin:0; font-size:16px;">${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}</h2>
+                        <p style="margin:3px 0; font-size:11px;">
+                            <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">📍 ${geo.lat}, ${geo.lng} ↗</a>
+                        </p>
+                        <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
+                            📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
+                        </p>
+                        <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
+                            Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="volume-display" style="font-size:20px; font-weight:bold; color:#007acc;">
+                            ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L
+                        </div>
+                        <div style="font-size: 13px; color: #666;">
+                            ${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³
+                        </div>
+                        <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
+                            ${fillPercentage}% Lleno
+                        </div>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div style="color:#666; font-size:11px; margin-bottom:4px;">PROMEDIO GASTO (24h)</div>
-                    <div style="font-weight:bold; color:#333;">${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
+                    <div class="metric-box">
+                        <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
+                        <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                    </div>
+                    <div class="metric-box">
+                        <div style="color:#666; font-size:11px; margin-bottom:4px;">PROMEDIO GASTO (24h)</div>
+                        <div style="font-weight:bold; color:#333;">${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
+                        <div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX', {maximumFractionDigits: 2})} MXN/h)</div>
+                    </div>
+                    <div class="metric-box">
+                        <div style="color:#666; font-size:11px; margin-bottom:4px;">AUTONOMÍA</div>
+                        <div style="font-weight:bold; color:#333;">${autonomyText}</div>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div style="color:#666; font-size:11px; margin-bottom:4px;">AUTONOMÍA</div>
-                    <div style="font-weight:bold; color:#333;">${autonomyText}</div>
-                </div>
-            </div>
-            <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
-        `;
+                <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
+            `;
+        }
         container.appendChild(card);
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
 
-        const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
-        const emojiColor = id === "CISTERNA_B" ? '🟣' : '🔵';
-        const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
+        // Ajuste en Telegram: Omitimos los detalles irrelevantes de Cisterna A
+        if (id === 'CISTERNA_A') {
+            telegramCaption += `🔵 *[${geo.name} - Control]*\n`;
+            telegramCaption += `Nivel espejo: ${currentDist.toFixed(2)} m | ${batteryText}\n\n`;
+        } else {
+            const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
+            const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
+            const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
 
-        telegramCaption += `${emojiColor} *[${geo.name}](${mapsUrl})*\n`;
-        telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
-        telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
-        telegramCaption += `Autonomía est.: ${autonomyText}\n`;
-        telegramCaption += `Tasa de consumo: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h\n`;
-        telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
+            telegramCaption += `${emojiColor} *[${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}]*\n`;
+            telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
+            telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
+            telegramCaption += `Autonomía est.: ${autonomyText}\n`;
+            telegramCaption += `Tasa de gasto: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h (~$${costoPorHoraMXN.toLocaleString('es-MX', {maximumFractionDigits: 2})} MXN)\n`;
+            telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
+        }
     }
 
     updateCharts(24);
