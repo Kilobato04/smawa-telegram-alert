@@ -330,16 +330,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
-        // --- CÁLCULO MONETARIO ---
         // Sugerencia: Usar un promedio blended entre red SACMEX y Piperos
+        // --- CÁLCULO MONETARIO ---
         const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
-        // Aplicamos Math.round para quitar centavos y dejar números enteros
+        
         const costoPorHoraMXN = Math.round(analysis.avgHourlyConsumption * costoPorLitro);
+        // NUEVO: Calculamos el costo absoluto de la última hora (sea gasto o recarga)
+        const costoUltimaHoraMXN = Math.round(Math.abs(flowL) * costoPorLitro);
 
-        // Lógica condicional: Si es Aguas Negras (CISTERNA_B), ocultamos la etiqueta de dinero
-        const moneyHtml = id !== 'CISTERNA_B' 
-            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">($${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
+        // Lógica condicional: Ocultamos el dinero si es Aguas Negras (CISTERNA_B)
+        const moneyHtmlPromedio = id !== 'CISTERNA_B' 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
+            : ``;
+            
+        const moneyHtmlUltimaHora = id !== 'CISTERNA_B' 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)</div>` 
             : ``;
 
         const card = document.createElement('div');
@@ -347,7 +353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // --- RENDERIZADO CONDICIONAL DE TARJETAS ---
         if (id === 'CISTERNA_A') {
-            // VISTA CISTERNA A: Simplificada (Solo espejo de agua y gráfica)
+            // VISTA CISTERNA A: Simplificada
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
@@ -363,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
             `;
         } else {
-            // VISTA CISTERNA C (Y Aguas Negras): Completa con finanzas opcionales
+            // VISTA CISTERNA C (Y Aguas Negras)
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
@@ -395,11 +401,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
                         <div class="${flowClass} font-weight-bold">${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L</div>
+                        ${moneyHtmlUltimaHora}
                     </div>
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">PROMEDIO GASTO (24h)</div>
                         <div style="font-weight:bold; color:#333;">${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h</div>
-                        ${moneyHtml}
+                        ${moneyHtmlPromedio}
                     </div>
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">AUTONOMÍA</div>
@@ -423,11 +430,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
             const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
             
-            // Si no es CISTERNA_B, agregamos el texto del costo redondeado
+            // Textos monetarios (vacíos si es Aguas Negras)
             const telegramMoneyText = id !== 'CISTERNA_B' ? ` (~$${costoPorHoraMXN.toLocaleString('es-MX')} MXN)` : '';
+            const telegramMoneyUltimaHora = id !== 'CISTERNA_B' ? ` (~$${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)` : '';
 
             telegramCaption += `${emojiColor} *[${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}]*\n`;
-            telegramCaption += `Nivel: ${fillPercentage}% (${flowStatusText} ${emojiStatus}) | ${batteryText}\n`;
+            telegramCaption += `Nivel actual: ${fillPercentage}% | ${batteryText}\n`;
+            telegramCaption += `Última hora: ${flowStatusText} ${emojiStatus} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L${telegramMoneyUltimaHora}\n`;
             telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
             telegramCaption += `Autonomía est.: ${autonomyText}\n`;
             telegramCaption += `Tasa de gasto: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h${telegramMoneyText}\n`;
