@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Lógica condicional: Si es Aguas Negras (CISTERNA_B), ocultamos la etiqueta de dinero
         const moneyHtml = id !== 'CISTERNA_B' 
-            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">(💸 $${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
+            ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">($${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
             : ``;
 
         const card = document.createElement('div');
