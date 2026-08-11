@@ -138,52 +138,92 @@ function updateCharts(hours) {
     const startMs = nowMs - (hours * 3600 * 1000);
     const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
 
+    // Asegurarnos de que la variable exista en caso de que sea el primer render
+    window.isHourlyBarChartC = window.isHourlyBarChartC || (sessionStorage.getItem('isHourlyBarChartC') === 'true');
+
     Object.keys(window.chartDataStore).forEach(id => {
         const data = window.chartDataStore[id];
-        const filteredX = [];
-        const filteredY = [];
+        let filteredX = [];
+        let filteredY = [];
         
-        let minY = Infinity;
-        let maxY = -Infinity;
-        
-        // --- NUEVO: Multiplicador dinámico ---
-        // Si es la Cisterna C, multiplicamos sus valores de gráfica por 2
         const multiplier = (id === 'CISTERNA_C') ? 2 : 1;
         
         for(let i = 0; i < data.x.length; i++) {
             if(data.x[i].getTime() >= startMs) {
                 filteredX.push(data.x[i]);
-                
-                // Extraemos el valor Y (m3) y lo multiplicamos si corresponde
-                const valY = data.y[i] !== null ? (data.y[i] * multiplier) : null;
-                filteredY.push(valY);
-                
-                // Buscamos el mínimo y máximo usando el valor ya multiplicado
-                if (valY !== null) {
-                    if (valY < minY) minY = valY;
-                    if (valY > maxY) maxY = valY;
-                }
+                filteredY.push(data.y[i] !== null ? (data.y[i] * multiplier) : null);
             }
         }
 
-        // Si la cisterna no tiene datos en este periodo, evitamos errores matemáticos
-        if (minY === Infinity) { minY = 0; maxY = 10; }
-
-        // Calculamos un margen del 5% arriba y abajo para que la curva respire
-        const rangeDiff = maxY - minY;
-        const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
-        const yRange = [Math.max(0, minY - padding), maxY + padding];
-
-        // --- ACTUALIZACIÓN DE GRÁFICA A LÍNEAS ---
-        Plotly.newPlot(`chart_${id}`, [{
-            x: filteredX,
-            y: filteredY,
-            type: 'scatter',
-            mode: 'lines',
+        let finalX = filteredX;
+        let finalY = filteredY;
+        let chartType = 'scatter';
+        let chartMode = 'lines';
+        let chartProps = {
             connectgaps: false, 
             line: { color: data.geo.color, width: 2 },
             fill: 'tozeroy',
             fillcolor: `${data.geo.color}22`
+        };
+
+        // --- NUEVO: AGRUPACIÓN POR HORA PARA HISTOGRAMA (CISTERNA C) ---
+        if (id === 'CISTERNA_C' && window.isHourlyBarChartC) {
+            const hourlyData = {};
+            
+            for (let i = 0; i < filteredX.length; i++) {
+                if (filteredY[i] === null) continue;
+                
+                // Redondeamos la fecha al inicio de la hora exacta (ej. 14:35 -> 14:00)
+                const d = new Date(filteredX[i]);
+                d.setMinutes(0, 0, 0);
+                const ts = d.getTime();
+                
+                if (!hourlyData[ts]) { hourlyData[ts] = { sum: 0, count: 0 }; }
+                hourlyData[ts].sum += filteredY[i];
+                hourlyData[ts].count += 1;
+            }
+            
+            finalX = [];
+            finalY = [];
+            
+            // Promediamos los ~12 puntos de cada hora
+            Object.keys(hourlyData).sort().forEach(ts => {
+                const avgVolume = hourlyData[ts].sum / hourlyData[ts].count;
+                finalX.push(new Date(parseInt(ts)));
+                finalY.push(avgVolume);
+            });
+            
+            // Cambiamos el estilo a Histograma
+            chartType = 'bar';
+            chartMode = undefined;
+            chartProps = {
+                marker: { color: data.geo.color, opacity: 0.8 }
+            };
+        }
+
+        // Recalculamos Mínimos y Máximos Dinámicos
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i < finalY.length; i++) {
+            if (finalY[i] !== null) {
+                if (finalY[i] < minY) minY = finalY[i];
+                if (finalY[i] > maxY) maxY = finalY[i];
+            }
+        }
+
+        if (minY === Infinity) { minY = 0; maxY = 10; }
+
+        const rangeDiff = maxY - minY;
+        const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
+        const yRange = [Math.max(0, minY - padding), maxY + padding];
+
+        // --- RENDERIZADO FINAL ---
+        Plotly.newPlot(`chart_${id}`, [{
+            x: finalX,
+            y: finalY,
+            type: chartType,
+            mode: chartMode,
+            ...chartProps
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
             xaxis: { 
@@ -401,6 +441,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
                             ${fillPercentage}% Lleno
                         </div>
+                        <!-- NUEVO BOTÓN DE HISTOGRAMA -->
+                        <button id="toggleChartBtnC" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;">
+                            📊 Promedio por Hora
+                        </button>
                     </div>
                 </div>
                 
@@ -424,6 +468,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         }
         container.appendChild(card);
+
+        // --- LÓGICA DEL BOTÓN DE HISTOGRAMA (CISTERNA C) ---
+        if (id === 'CISTERNA_C') {
+            setTimeout(() => {
+                const btnToggle = document.getElementById('toggleChartBtnC');
+                if (btnToggle) {
+                    // Leemos la memoria por si la página se acaba de auto-recargar
+                    window.isHourlyBarChartC = sessionStorage.getItem('isHourlyBarChartC') === 'true';
+                    
+                    const updateBtnUI = () => {
+                        btnToggle.innerHTML = window.isHourlyBarChartC ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
+                        btnToggle.style.backgroundColor = window.isHourlyBarChartC ? '#e0f7fa' : '#f8f9fa';
+                    };
+                    updateBtnUI();
+
+                    btnToggle.addEventListener('click', () => {
+                        window.isHourlyBarChartC = !window.isHourlyBarChartC;
+                        sessionStorage.setItem('isHourlyBarChartC', window.isHourlyBarChartC); // Guardamos estado
+                        updateBtnUI();
+                        
+                        // Buscamos cuántas horas estamos visualizando actualmente y repintamos
+                        const activeBtn = document.querySelector('.filter-btn.active');
+                        const currentHours = activeBtn ? parseInt(activeBtn.dataset.hours) : 24;
+                        updateCharts(currentHours);
+                    });
+                }
+            }, 50);
+        }
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
