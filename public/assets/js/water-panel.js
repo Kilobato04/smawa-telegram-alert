@@ -269,15 +269,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter-btn:hover { background: #e6f2ff; }
         .filter-btn.active:hover { background: #005999; }
         
-        /* 🔥 NUEVO: REGLAS PARA ESTIRAR DE ORILLA A ORILLA 🔥 */
+        /* 🔥 Responsividad: Tarjetas de 800px sin bordes blancos a los lados */
         * { box-sizing: border-box; } 
-        body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; }
+        body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; background-color: #f4f7f6; }
         
         #cisternsGrid { 
             width: 100% !important; 
             max-width: 100% !important; 
-            /* 10px arriba/abajo, 0px a los lados */
-            padding: 10px 0px !important; 
+            padding: 10px 4px !important; /* Mínimo respiro lateral */
             display: flex; 
             flex-direction: column; 
             align-items: center; 
@@ -286,12 +285,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         .cistern-card { 
             width: 100% !important; 
-            max-width: 800px !important; 
+            max-width: 800px !important; /* Panel más ancho */
             margin-left: 0 !important; 
             margin-right: 0 !important; 
-            border-radius: 0px !important; /* Elimina las esquinas redondeadas para pegar al borde */
-            border-left: none !important;
-            border-right: none !important;
+            border-radius: 12px !important; /* Regresamos los bordes bonitos */
             overflow: hidden !important; 
         }
 
