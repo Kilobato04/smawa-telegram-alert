@@ -10,7 +10,7 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- ICONOS SVG (Reemplazo total de Emojis para AWS Puppeteer) ---
+// --- ICONOS SVG ---
 const ICONS = {
     pin: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`,
     ruler: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3l-7.6-7.6a2 2 0 0 0-2.8 0l-1.4 1.4a2 2 0 0 0 0 2.8l7.6 7.6a2 2 0 0 0 2.8 0l1.4-1.4a2 2 0 0 0 0-2.8z"></path><path d="M14.5 10.5L11 14"></path><path d="M17.5 13.5L14 17"></path></svg>`,
@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loader.innerHTML = `
         <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a192f; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center;">
             <div style="width: 45px; height: 45px; border: 4px solid #1a365d; border-top: 4px solid #007acc; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <div style="margin-top: 15px; font-weight: 600; color: #ffffff; font-family: sans-serif; font-size: 14px;">Consultando datos...</div>
+            <div style="margin-top: 15px; font-weight: 600; color: #ffffff; font-family: sans-serif; font-size: 14px;">Consultando telemetría...</div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         </div>
     `;
@@ -236,16 +236,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function scheduleNextReload() {
         const now = new Date();
         const msUntilNextHour = (60 - now.getMinutes()) * 60000 - (now.getSeconds() * 1000);
-        console.log(`⏳ Próxima actualización en aprox ${Math.round(msUntilNextHour / 60000)} minutos.`);
         setTimeout(() => { window.location.reload(); }, msUntilNextHour);
     }
     scheduleNextReload();
-
-    // Ocultar el encabezado original por completo
-    const header = document.querySelector('.header');
-    if (header) {
-        header.style.display = 'none';
-    }
 
     const container = document.getElementById('cisternsGrid');
 
@@ -253,7 +246,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isBot = urlParams.get('bot') === 'true';
 
     const nowReal = new Date();
-    // Ajuste condicional: Si es el bot (AWS), le restamos 6 horas para empatar con CDMX
     const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
     
     const options = { 
@@ -264,13 +256,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- ENCABEZADO Y FILTROS INTEGRADOS ---
     const filterHtml = `
-        <div style="text-align: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-top: 10px;">
+        <div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; margin-top: 10px;">
+            <img src="assets/images/logo-smability.png" alt="Smability" style="height: 35px; margin-bottom: 15px; filter: brightness(0) invert(1);">
             <h2 style="margin: 0; font-size: 18px; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Monitoreo de Red Cisternas Ibero CDMX</h2>
-            <div style="font-size: 13px; color: #64ffda; font-weight: bold; margin-top: 6px; display: flex; justify-content: center; align-items: center;">
+            <div style="font-size: 13px; color: #64ffda; font-weight: bold; margin-top: 8px; display: flex; justify-content: center; align-items: center;">
                 <span class="svg-icon" style="margin-right: 6px;">${ICONS.calendar}</span> ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} 
             </div>
         </div>
-        <div class="time-filters" style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap;">
+        <div class="time-filters">
             <button class="filter-btn" data-hours="168">7 Días</button>
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
             <button class="filter-btn" data-hours="12">12 Hrs</button>
@@ -279,86 +272,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="filter-btn" data-hours="2">2 Hrs</button>
         </div>
     `;
-
-    const style = document.createElement('style');
-    style.innerHTML = `
-        /* Estilos de botones existentes */
-        .filter-btn { padding: 5px 12px; border: 1px solid #64ffda; background: transparent; color: #64ffda; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; outline: none;}
-        .filter-btn.active { background: #64ffda; color: #0a192f; border-color: #64ffda; }
-        .filter-btn:hover { background: rgba(100, 255, 218, 0.1); }
-        .filter-btn.active:hover { background: #52e0c4; }
-        
-        /* 🔥 NUEVO: ELIMINACIÓN DEL FONDO GRIS Y FUSIÓN DE FONDOS 🔥 */
-        * { box-sizing: border-box; } 
-        
-        body, html { 
-            margin: 0; 
-            padding: 0; 
-            overflow-x: hidden; 
-            width: 100%; 
-            background: linear-gradient(135deg, #0a192f 0%, #1a365d 100%) !important;
-            min-height: 100vh;
-        }
-
-        /* Eliminamos fondos grises de contenedores padres para que se vea el navy */
-        .container, .main-container, .wrap, section, main {
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-        
-        #cisternsGrid { 
-            width: 100% !important; 
-            max-width: 800px !important; 
-            margin: 0 auto;
-            padding: 10px 10px !important; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            background: transparent !important; /* Asegura fusión total */
-        }
-        
-        .cistern-card { 
-            width: 100% !important; 
-            background: #ffffff; 
-            margin-bottom: 15px !important;
-            border-radius: 12px !important; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
-            padding: 15px;
-            overflow: hidden !important; 
-        }
-
-        .js-plotly-plot, .plot-container, .svg-container, .main-svg { 
-            width: 100% !important; 
-            max-width: 100% !important; 
-            min-width: 0 !important; 
-        }
-
-        /* Utilidad para alinear SVG con texto */
-        .svg-icon {
-            display: inline-flex;
-            align-items: center;
-            vertical-align: middle;
-            margin-right: 4px;
-        }
-        .svg-icon svg {
-            display: block;
-        }
-
-        @media (max-width: 480px) {
-            .volume-display { font-size: 18px !important; }
-            .metric-box { padding: 4px; font-size: 11px; }
-            .time-filters { gap: 4px; }
-            .filter-btn { padding: 4px 8px; font-size: 11px; }
-        }
-    `;
-    document.head.appendChild(style);
-
-    if (!document.querySelector('meta[name="viewport"]')) {
-        const meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-        document.head.appendChild(meta);
-    }
 
     const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY)
         .filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null)
@@ -377,7 +290,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const results = await Promise.all(promises);
 
-    // Inicializamos el objeto global para que la Lambda extraiga los datos estructurados
     window.botTelegramData = {};
 
     for (const res of results) {
@@ -441,8 +353,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         const sensorHtml = analysis.isStuck 
-            ? `<div class="sensor-warning" style="display: inline-block; color: #d35400;"><span class="svg-icon">${ICONS.warning}</span> ALERTA: Sin variación 12h</div>` 
-            : `<div class="sensor-ok" style="display: inline-block; color: #27ae60;"><span class="svg-icon">${ICONS.check}</span> Operativo</div>`;
+            ? `<div class="sensor-warning" style="display: inline-block;"><span class="svg-icon">${ICONS.warning}</span> ALERTA: Sin variación 12h</div>` 
+            : `<div class="sensor-ok"><span class="svg-icon">${ICONS.check}</span> Operativo</div>`;
 
         const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
@@ -485,7 +397,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <button id="toggleChartBtn_${id}" style="display: none; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;"><span class="svg-icon">${ICONS.barChart}</span> Promedio por Hora</button>
                     </div>
                 </div>
-                <!-- Div con overflow hidden y ancho controlado -->
                 <div id="body_CISTERNA_A" style="display: none; width: 100%; max-width: 100%; overflow: hidden;">
                     <div id="chart_${id}" style="width:100% !important; min-width: 0 !important; height:160px; margin-top:10px; overflow: hidden !important;"></div>
                 </div>
@@ -532,7 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; font-size:13px;">
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
-                        <div class="${flowClass} font-weight-bold" style="display:flex; align-items:center;">
+                        <div class="${flowClass} font-weight-bold" style="display:flex; align-items:center; justify-content:center;">
                             ${isStable ? `<span class="svg-icon">${ICONS.stable}</span>` : (isPositive ? `<span class="svg-icon" style="color: #27ae60;">${ICONS.up}</span>` : `<span class="svg-icon" style="color: #e74c3c;">${ICONS.down}</span>`)}
                             ${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L
                         </div>
@@ -555,7 +466,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         container.appendChild(card);
 
-        // Lógica de Mostrar/Ocultar exclusiva de Cisterna A (Sin resize global)
         if (id === 'CISTERNA_A') {
             setTimeout(() => {
                 const btnToggleA = document.getElementById('toggleCisternaA');
@@ -583,7 +493,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 50);
         }
 
-        // Lógica: "Promedio vs Línea" para TODAS las cisternas sin exclusión
         setTimeout(() => {
             const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
             if (btnToggle) {
@@ -633,7 +542,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loaderEl = document.getElementById('smawa-loader');
     if (loaderEl) loaderEl.remove();
 
-    // 🔥 GENERACIÓN DEL MENSAJE DE TELEGRAM AL FINALIZAR EL BUCLE 🔥
+    // 🔥 GENERACIÓN DEL MENSAJE DE TELEGRAM AL FINALIZAR EL BUCLE (OPCIÓN 2) 🔥
     const pad2 = (n) => n.toString().padStart(2, '0');
     const captionDate = `${pad2(nowMx.getDate())}/${pad2(nowMx.getMonth() + 1)}/${nowMx.getFullYear()}, ${pad2(nowMx.getHours())}:${pad2(nowMx.getMinutes())}`;
 
