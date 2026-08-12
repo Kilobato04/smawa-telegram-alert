@@ -136,7 +136,7 @@ function updateCharts(hours) {
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    // 🔥 REGRESO DEL TRUCO MATEMÁTICO: Restamos 6 horas si es el bot para alinear Plotly
+    // 🔥 FIX 1: Restauramos el ajuste temporal (UTC-6) si es el bot, cerrando el "gap" de la gráfica.
     const realNowMs = new Date().getTime();
     const nowMs = isBot ? realNowMs - (6 * 3600 * 1000) : realNowMs;
     const startMs = nowMs - (hours * 3600 * 1000);
@@ -242,18 +242,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     scheduleNextReload();
 
     const container = document.getElementById('cisternsGrid');
+
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    // 🔥 REGRESO DEL TRUCO MATEMÁTICO: Ajuste para el texto del calendario
-    const nowReal = new Date();
-    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
-    
-    const options = { 
-        timeZone: isBot ? 'UTC' : undefined, 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-    };
-    const formattedDate = nowMx.toLocaleDateString('es-MX', options);
+    // 🔥 FIX 2: Cálculo blindado (UTC-6) aislando la Lambda de su propio reloj roto
+    let formattedDate = "";
+    let captionDate = "";
+    const pad2 = (n) => n.toString().padStart(2, '0');
+
+    if (isBot) {
+        const realNow = new Date();
+        const nowMx = new Date(realNow.getTime() - (6 * 3600 * 1000));
+        
+        const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        
+        const hrNum = pad2(nowMx.getUTCHours());
+        const minNum = pad2(nowMx.getUTCMinutes());
+        const dayNum = pad2(nowMx.getUTCDate());
+        const monthNum = pad2(nowMx.getUTCMonth() + 1);
+        const yearNum = nowMx.getUTCFullYear();
+        
+        // Texto para el Header de la foto
+        formattedDate = `${dias[nowMx.getUTCDay()]}, ${nowMx.getUTCDate()} de ${meses[nowMx.getUTCMonth()]} de ${yearNum}, ${hrNum}:${minNum}`;
+        // Texto para el pie del mensaje de Telegram
+        captionDate = `${dayNum}/${monthNum}/${yearNum}, ${hrNum}:${minNum}`;
+    } else {
+        const now = new Date();
+        formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        captionDate = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}, ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    }
 
     // --- ENCABEZADO Y FILTROS INTEGRADOS ---
     const filterHtml = `
@@ -546,8 +565,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loaderEl) loaderEl.remove();
 
     // 🔥 GENERACIÓN DEL MENSAJE DE TELEGRAM AL FINALIZAR EL BUCLE (OPCIÓN 2) 🔥
-    const pad2 = (n) => n.toString().padStart(2, '0');
-    const captionDate = `${pad2(nowMx.getDate())}/${pad2(nowMx.getMonth() + 1)}/${nowMx.getFullYear()}, ${pad2(nowMx.getHours())}:${pad2(nowMx.getMinutes())}`;
 
     const c_perc = window.botTelegramData.C?.porcentaje || '--';
     const c_lit = window.botTelegramData.C?.litros || '--';
@@ -558,13 +575,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.telegramCaption = `💧 *Reporte de Nivel Red de Cisternas IBERO CDMX*
 Estado actual de las reservas de agua:
 
-🔵 *Agua Potable (Cisterna C - Total):*
+🔵 *Agua Potable (Cisterna C):*
 Nivel al ${c_perc}% (${c_lit} L). Autonomía: ${c_aut}.
 
 🟢 *Aguas Servidas (Cisterna B):*
 Nivel al ${b_perc}%. Gasto promedio: ${b_gas} L/h.
 
-🔗 [Ver Panel Interactivo Web](https://smawatelegram.netlify.app)
+🔗 [Ver Panel Web](https://smawatelegram.netlify.app)
 _${captionDate} (CDMX)_`;
 
     setTimeout(() => { window.dashboardReady = true; }, 1000); 
