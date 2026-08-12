@@ -134,11 +134,16 @@ function analyzeMetrics(series, geo) {
 window.chartDataStore = {};
 
 function updateCharts(hours) {
-    const nowMs = new Date().getTime();
-    const startMs = nowMs - (hours * 3600 * 1000);
-    const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
+    // 🔥 Detectamos si la página la abrió la Lambda de AWS
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBot = urlParams.get('bot') === 'true';
 
-    // Objeto para manejar el estado independiente de los botones
+    const realNowMs = new Date().getTime();
+    // Si es el bot (UTC), le restamos 6 horas a la gráfica. Si eres tú, se queda igual.
+    const nowMs = isBot ? realNowMs - (6 * 3600 * 1000) : realNowMs;
+    const startMs = nowMs - (hours * 3600 * 1000);
+    
+    const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
     window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
@@ -293,9 +298,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     document.head.appendChild(style);
 
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    const formattedDate = now.toLocaleDateString('es-MX', options);
+    // 🔥 Detectamos al bot para la fecha impresa en el frontend
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBot = urlParams.get('bot') === 'true';
+
+    const nowReal = new Date();
+    // Ajuste condicional: Si es el bot (AWS), le restamos 6 horas para empatar con CDMX
+    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
+    
+    // Si es bot, forzamos UTC en las opciones para que el navegador de AWS no intente reajustar nada
+    const options = { 
+        timeZone: isBot ? 'UTC' : undefined, 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+    };
+    const formattedDate = nowMx.toLocaleDateString('es-MX', options);
     
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
