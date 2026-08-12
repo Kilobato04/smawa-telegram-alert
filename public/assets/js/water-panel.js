@@ -217,7 +217,7 @@ function updateCharts(hours) {
         const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
         const yRange = [Math.max(0, minY - padding), maxY + padding];
 
-        // --- RENDERIZADO FINAL ---
+        // --- RENDERIZADO FINAL CON FIX DE PLOTLY ---
         Plotly.newPlot(`chart_${id}`, [{
             x: finalX,
             y: finalY,
@@ -240,6 +240,9 @@ function updateCharts(hours) {
                 tickfont: { size: 9, color: '#888' } 
             },
             staticPlot: true
+        }, {
+            displayModeBar: false,  // Ocultar herramientas al hacer hover
+            responsive: true
         });
     });
 }
@@ -265,9 +268,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Iniciamos el cronómetro al cargar la página
     scheduleNextReload();
 
-    const container = document.getElementById('cisternsGrid');
+    // 1. Ocultar el encabezado original por completo
     const header = document.querySelector('.header');
+    if (header) {
+        header.style.display = 'none';
+    }
+
+    const container = document.getElementById('cisternsGrid');
     
+    // Inserción de filtros antes del grid
     const filterHtml = `
         <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn" data-hours="168">7 Días</button>
@@ -278,7 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="filter-btn" data-hours="2">2 Hrs</button>
         </div>
     `;
-    header.insertAdjacentHTML('afterend', filterHtml);
+    container.insertAdjacentHTML('beforebegin', filterHtml);
 
     const style = document.createElement('style');
     style.innerHTML = `
@@ -293,7 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     const formattedDate = now.toLocaleDateString('es-MX', options);
     
-    document.getElementById('updateTime').innerText = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1) + ' hrs';
+    // Obviamos updateTime dado que se quitó el header, pero conservamos telegramCaption
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
     // Extraer y ordenar las cisternas: Forzamos a que CISTERNA_C siempre sea la primera
@@ -377,16 +386,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
-        // Sugerencia: Usar un promedio blended entre red SACMEX y Piperos
         // --- CÁLCULO MONETARIO ---
         const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
         
         const costoPorHoraMXN = Math.round(analysis.avgHourlyConsumption * costoPorLitro);
-        // NUEVO: Calculamos el costo absoluto de la última hora (sea gasto o recarga)
         const costoUltimaHoraMXN = Math.round(Math.abs(flowL) * costoPorLitro);
 
-        // Lógica condicional: Ocultamos el dinero si es Aguas Negras (CISTERNA_B)
         const moneyHtmlPromedio = id !== 'CISTERNA_B' 
             ? `<div style="font-size:10px; color:#d35400; font-weight:bold; margin-top:2px;">($${costoPorHoraMXN.toLocaleString('es-MX')} MXN/h)</div>` 
             : ``;
@@ -400,7 +406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // --- RENDERIZADO CONDICIONAL DE TARJETAS ---
         if (id === 'CISTERNA_A') {
-            // VISTA CISTERNA A: Simplificada
+            // VISTA CISTERNA A: Inicia colapsada por default y tiene botón Mostrar
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
@@ -412,15 +418,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                             📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
                         </p>
                     </div>
+                    <div>
+                        <button id="toggleCisternaA" style="padding: 4px 8px; font-size: 11px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f8f9fa;">👁️ Mostrar</button>
+                    </div>
                 </div>
-                <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
+                <div id="body_CISTERNA_A" style="display: none;">
+                    <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
+                </div>
             `;
         } else {
             // VISTA CISTERNA C (Y Aguas Negras)
+            // Agregamos Fecha/Hora debajo del título solo para Cisterna C
+            const dateHtml = id === 'CISTERNA_C' ? `<div style="font-size:12px; color:#007acc; font-weight:bold; margin-top:2px; margin-bottom:8px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs</div>` : '';
+
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
                         <h2 class="cistern-name" style="margin:0; font-size:16px;">${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}</h2>
+                        ${dateHtml}
                         <p style="margin:3px 0; font-size:11px;">
                             <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">📍 ${geo.lat}, ${geo.lng} ↗</a>
                         </p>
@@ -467,7 +482,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
             `;
         }
+        
         container.appendChild(card);
+
+        // --- LÓGICA DEL BOTÓN COLAPSAR CISTERNA A ---
+        if (id === 'CISTERNA_A') {
+            setTimeout(() => {
+                const btnToggleA = document.getElementById('toggleCisternaA');
+                const bodyCisternaA = document.getElementById('body_CISTERNA_A');
+                if (btnToggleA && bodyCisternaA) {
+                    btnToggleA.addEventListener('click', () => {
+                        if (bodyCisternaA.style.display === 'none') {
+                            bodyCisternaA.style.display = 'block';
+                            btnToggleA.innerHTML = '👁️ Ocultar';
+                            // Disparamos un resize para que Plotly recalcule los anchos si estaba escondido
+                            window.dispatchEvent(new Event('resize')); 
+                        } else {
+                            bodyCisternaA.style.display = 'none';
+                            btnToggleA.innerHTML = '👁️ Mostrar';
+                        }
+                    });
+                }
+            }, 50);
+        }
 
         // --- LÓGICA DEL BOTÓN DE HISTOGRAMA (CISTERNA C) ---
         if (id === 'CISTERNA_C') {
