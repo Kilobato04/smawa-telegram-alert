@@ -573,11 +573,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const b_perc = window.botTelegramData.B?.porcentaje || '--';
     const b_gas = window.botTelegramData.B?.gastoPromedio || '--';
 
-    window.telegramCaption = `💧 *Reporte de Nivel Red de Cisternas IBERO CDMX*
+    window.telegramCaption = `💧 *Reporte Horario de la Red de Cisternas IBERO CDMX*
 Estado actual de las reservas de agua:
 
 🔵 *Agua Potable (Cisterna C):*
-Nivel al ${c_perc}% (${c_lit} L). Autonomía: ${c_aut}.
+Nivel al ${c_perc}% (${c_lit} L). Gasto promedio: ${c_gas} L/h. Autonomía: ${c_aut}.
 
 🟢 *Aguas Servidas (Cisterna B):*
 Nivel al ${b_perc}%. Gasto promedio: ${b_gas} L/h.
