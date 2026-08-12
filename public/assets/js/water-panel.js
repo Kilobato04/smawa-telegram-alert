@@ -263,12 +263,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const style = document.createElement('style');
     style.innerHTML = `
+        /* Estilos de botones existentes */
         .filter-btn { padding: 5px 12px; border: 1px solid #007acc; background: #f8f9fa; color: #007acc; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; outline: none;}
         .filter-btn.active { background: #007acc; color: white; border-color: #007acc; }
         .filter-btn:hover { background: #e6f2ff; }
         .filter-btn.active:hover { background: #005999; }
+        
+        /* 🔥 NUEVO: REGLAS DE RESPONSIVIDAD GLOBAL 🔥 */
+        * { box-sizing: border-box; } 
+        body { margin: 0; padding: 0; overflow-x: hidden; }
+        
+        /* Forzamos el contenedor principal a adaptarse a la pantalla */
+        #cisternsGrid { 
+            width: 100% !important; 
+            max-width: 100% !important; 
+            padding: 10px !important; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        }
+        
+        /* Forzamos las tarjetas a estirarse llenando el celular */
+        .cistern-card { 
+            width: 100% !important; 
+            max-width: 600px !important; 
+            margin-left: 0 !important; 
+            margin-right: 0 !important; 
+        }
+
+        /* Ajuste fino para pantallas de celulares muy pequeñas */
+        @media (max-width: 480px) {
+            .volume-display { font-size: 18px !important; }
+            .metric-box { padding: 4px; font-size: 11px; }
+            .time-filters { gap: 4px; }
+            .filter-btn { padding: 4px 8px; font-size: 11px; }
+        }
     `;
     document.head.appendChild(style);
+
+    // 🔥 NUEVO: Forzamos la etiqueta Viewport por si tu HTML original no la tiene
+    if (!document.querySelector('meta[name="viewport"]')) {
+        const meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        document.head.appendChild(meta);
+    }
     
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
