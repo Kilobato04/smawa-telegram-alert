@@ -412,6 +412,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const card = document.createElement('div');
         card.className = 'cistern-card';
         
+        window.botTelegramData = window.botTelegramData || {};
+        
+        if (id === 'CISTERNA_C') {
+            window.botTelegramData.C = {
+                porcentaje: fillPercentage,
+                litros: currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0}),
+                autonomia: autonomyText
+            };
+        } else if (id === 'CISTERNA_B') {
+            window.botTelegramData.B = {
+                porcentaje: fillPercentage,
+                gastoPromedio: analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})
+            };
+        }
+
+        const card = document.createElement('div');
+        card.className = 'cistern-card';
+        
         if (id === 'CISTERNA_A') {
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
