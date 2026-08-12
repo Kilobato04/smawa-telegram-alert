@@ -420,11 +420,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             📏 Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
                         </p>
                     </div>
-                    <div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
                         <button id="toggleCisternaA" style="padding: 4px 8px; font-size: 11px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f8f9fa;">👁️ Mostrar</button>
+                        <!-- 🔥 NUEVO: Botón de Gráfica (Oculto por defecto hasta que se abre el panel) -->
+                        <button id="toggleChartBtn_${id}" style="display: none; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;">📊 Promedio por Hora</button>
                     </div>
                 </div>
-                <div id="body_CISTERNA_A" style="display: none;">
+                <!-- 🔥 FIX DE DISEÑO: overflow hidden previene que Plotly empuje los márgenes -->
+                <div id="body_CISTERNA_A" style="display: none; width: 100%; max-width: 100%; overflow: hidden;">
                     <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
                 </div>
             `;
@@ -482,59 +485,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         container.appendChild(card);
 
-        // Lógica Colapsar Cisterna A
+        // Lógica de Mostrar/Ocultar exclusiva de Cisterna A
         if (id === 'CISTERNA_A') {
             setTimeout(() => {
                 const btnToggleA = document.getElementById('toggleCisternaA');
                 const bodyCisternaA = document.getElementById('body_CISTERNA_A');
+                const btnChartA = document.getElementById(`toggleChartBtn_${id}`); 
+                
                 if (btnToggleA && bodyCisternaA) {
                     btnToggleA.addEventListener('click', () => {
                         if (bodyCisternaA.style.display === 'none') {
                             bodyCisternaA.style.display = 'block';
                             btnToggleA.innerHTML = '👁️ Ocultar';
-                            window.dispatchEvent(new Event('resize')); 
+                            if (btnChartA) btnChartA.style.display = 'block'; 
+                            
+                            // 🔥 EL SECRETO: En vez de hacer un resize global que rompe la página, 
+                            // le pedimos a Plotly que recalcule su tamaño interno con delicadeza.
+                            setTimeout(() => {
+                                if (window.Plotly) Plotly.Plots.resize(`chart_${id}`);
+                            }, 50);
+                            
                         } else {
                             bodyCisternaA.style.display = 'none';
                             btnToggleA.innerHTML = '👁️ Mostrar';
+                            if (btnChartA) btnChartA.style.display = 'none'; 
                         }
                     });
                 }
             }, 50);
         }
 
-        // --- EVENT LISTENER INDEPENDIENTE PARA CADA BOTÓN (C y B) ---
-        if (id === 'CISTERNA_C' || id === 'CISTERNA_B') {
-            setTimeout(() => {
-                const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
-                if (btnToggle) {
-                    // 🔥 NUEVO: Mantenemos la misma lógica del TRUE por defecto para los botones
-                    // 🔥 Mismo blindaje para la interfaz
-                    window.isHourlyBarChart = window.isHourlyBarChart || {};
-                    if (isBot) {
-                        window.isHourlyBarChart[id] = true;
-                    } else {
-                        const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
-                        window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
-                    }
-                    
-                    const updateBtnUI = () => {
-                        btnToggle.innerHTML = window.isHourlyBarChart[id] ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
-                        btnToggle.style.backgroundColor = window.isHourlyBarChart[id] ? '#e0f7fa' : '#f8f9fa';
-                    };
-                    updateBtnUI();
-
-                    btnToggle.addEventListener('click', () => {
-                        window.isHourlyBarChart[id] = !window.isHourlyBarChart[id];
-                        sessionStorage.setItem(`isHourlyBarChart_${id}`, window.isHourlyBarChart[id]); 
-                        updateBtnUI();
-                        
-                        const activeBtn = document.querySelector('.filter-btn.active');
-                        const currentHours = activeBtn ? parseInt(activeBtn.dataset.hours) : 24;
-                        updateCharts(currentHours);
-                    });
+        // 🔥 NUEVA LÓGICA: Ahora configuramos el botón "Promedio vs Línea" para TODAS las cisternas sin exclusión
+        setTimeout(() => {
+            const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
+            if (btnToggle) {
+                window.isHourlyBarChart = window.isHourlyBarChart || {};
+                if (isBot) {
+                    window.isHourlyBarChart[id] = true;
+                } else {
+                    const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
+                    window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
                 }
-            }, 50);
-        }
+                
+                const updateBtnUI = () => {
+                    btnToggle.innerHTML = window.isHourlyBarChart[id] ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
+                    btnToggle.style.backgroundColor = window.isHourlyBarChart[id] ? '#e0f7fa' : '#f8f9fa';
+                };
+                updateBtnUI();
+
+                btnToggle.addEventListener('click', () => {
+                    window.isHourlyBarChart[id] = !window.isHourlyBarChart[id];
+                    sessionStorage.setItem(`isHourlyBarChart_${id}`, window.isHourlyBarChart[id]); 
+                    updateBtnUI();
+                    
+                    const activeBtn = document.querySelector('.filter-btn.active');
+                    const currentHours = activeBtn ? parseInt(activeBtn.dataset.hours) : 24;
+                    updateCharts(currentHours);
+                });
+            }
+        }, 50);
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
