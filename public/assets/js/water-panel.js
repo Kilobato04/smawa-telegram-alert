@@ -138,10 +138,15 @@ function updateCharts(hours) {
     const startMs = nowMs - (hours * 3600 * 1000);
     const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
 
-    // Asegurarnos de que la variable exista en caso de que sea el primer render
-    window.isHourlyBarChartC = window.isHourlyBarChartC || (sessionStorage.getItem('isHourlyBarChartC') === 'true');
+    // Objeto para manejar el estado independiente de los botones
+    window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
+        // Inicializamos desde memoria si no existe para este ID
+        if (window.isHourlyBarChart[id] === undefined) {
+            window.isHourlyBarChart[id] = sessionStorage.getItem(`isHourlyBarChart_${id}`) === 'true';
+        }
+
         const data = window.chartDataStore[id];
         let filteredX = [];
         let filteredY = [];
@@ -166,8 +171,8 @@ function updateCharts(hours) {
             fillcolor: `${data.geo.color}22`
         };
 
-        // --- NUEVO: AGRUPACIÓN POR HORA PARA HISTOGRAMA (CISTERNA C) ---
-        if (id === 'CISTERNA_C' && window.isHourlyBarChartC) {
+        // --- HISTOGRAMA INDEPENDIENTE (CISTERNA C y B) ---
+        if (window.isHourlyBarChart[id]) {
             const hourlyData = {};
             
             for (let i = 0; i < filteredX.length; i++) {
@@ -217,7 +222,7 @@ function updateCharts(hours) {
         const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
         const yRange = [Math.max(0, minY - padding), maxY + padding];
 
-        // --- RENDERIZADO FINAL CON FIX DE PLOTLY ---
+        // --- RENDERIZADO FINAL ---
         Plotly.newPlot(`chart_${id}`, [{
             x: finalX,
             y: finalY,
@@ -249,23 +254,14 @@ function updateCharts(hours) {
 
 // --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
-    // --- LÓGICA DE ACTUALIZACIÓN SINCRONIZADA ---
     console.log('⏰ Configurando actualización sincronizada...');
     
     function scheduleNextReload() {
         const now = new Date();
-        // Calculamos los milisegundos exactos que faltan para el inicio de la siguiente hora
         const msUntilNextHour = (60 - now.getMinutes()) * 60000 - (now.getSeconds() * 1000);
-        
         console.log(`⏳ Próxima actualización en aprox ${Math.round(msUntilNextHour / 60000)} minutos.`);
-        
-        // Programamos la recarga para que ocurra exactamente en ese milisegundo
-        setTimeout(() => {
-            window.location.reload();
-        }, msUntilNextHour);
+        setTimeout(() => { window.location.reload(); }, msUntilNextHour);
     }
-
-    // Iniciamos el cronómetro al cargar la página
     scheduleNextReload();
 
     // 1. Ocultar el encabezado original por completo
@@ -276,9 +272,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const container = document.getElementById('cisternsGrid');
     
-    // Inserción de filtros antes del grid
+    // Filtros HTML, ahora los vamos a inyectar dentro de Cisterna C en lugar de volando
     const filterHtml = `
-        <div class="time-filters" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+        <div class="time-filters" style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn" data-hours="168">7 Días</button>
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
             <button class="filter-btn" data-hours="12">12 Hrs</button>
@@ -287,12 +283,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button class="filter-btn" data-hours="2">2 Hrs</button>
         </div>
     `;
-    container.insertAdjacentHTML('beforebegin', filterHtml);
 
     const style = document.createElement('style');
     style.innerHTML = `
-        .filter-btn { padding: 6px 15px; border: 1px solid #007acc; background: white; color: #007acc; border-radius: 15px; cursor: pointer; font-size: 13px; font-weight: bold; transition: all 0.2s; outline: none;}
-        .filter-btn.active { background: #007acc; color: white; }
+        .filter-btn { padding: 5px 12px; border: 1px solid #007acc; background: #f8f9fa; color: #007acc; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; outline: none;}
+        .filter-btn.active { background: #007acc; color: white; border-color: #007acc; }
         .filter-btn:hover { background: #e6f2ff; }
         .filter-btn.active:hover { background: #005999; }
     `;
@@ -302,10 +297,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     const formattedDate = now.toLocaleDateString('es-MX', options);
     
-    // Obviamos updateTime dado que se quitó el header, pero conservamos telegramCaption
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
-    // Extraer y ordenar las cisternas: Forzamos a que CISTERNA_C siempre sea la primera
     const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY)
         .filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null)
         .sort((a, b) => {
@@ -328,14 +321,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const series = processApiData(apiRawData, geo, id);
         const batteryText = batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A';
         const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
+        
+        // Determinar si inyectamos los filtros (solo para la primera tarjeta: Cisterna C)
+        const injectedFilters = id === 'CISTERNA_C' ? filterHtml : '';
 
         if (!series.valid) {
-            container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos recientes</div></div>`;
+            container.innerHTML += `<div class="cistern-card">${injectedFilters}<h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning">⚠️ Sin datos recientes</div></div>`;
             telegramCaption += `*[${geo.name}](${mapsUrl})*\n⚠️ Sensor sin datos recientes.\n\n`;
             continue;
         }
 
-        // Buscar el último índice válido (ignorando los huecos de la gráfica)
         let lastValidIdx = series.dist.length - 1;
         while(lastValidIdx >= 0 && series.dist[lastValidIdx] === null) { lastValidIdx--; }
         if (lastValidIdx < 0) continue;
@@ -359,14 +354,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const analysis = analyzeMetrics(series, geo);
 
-        // --- NUEVA LÓGICA DE NEGOCIO: CONSOLIDACIÓN EN CISTERNA C ---
         if (id === 'CISTERNA_C') {
-            // Multiplicamos por 2 para representar el vaso completo
             currentVol.liters *= 2;
             currentVol.m3 *= 2;
             rawFlowL *= 2;
             analysis.avgHourlyConsumption *= 2;
-            geo.max_capacity_l *= 2; // Duplicamos capacidad base para que el % sea correcto
+            geo.max_capacity_l *= 2; 
         }
 
         const flowL = isStable ? 0 : rawFlowL;
@@ -386,7 +379,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<div class="sensor-warning">⚠️ ALERTA: Sin variación 12h</div>` 
             : `<div class="sensor-ok">✅ Operativo</div>`;
 
-        // --- CÁLCULO MONETARIO ---
         const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
         
@@ -404,9 +396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const card = document.createElement('div');
         card.className = 'cistern-card';
         
-        // --- RENDERIZADO CONDICIONAL DE TARJETAS ---
         if (id === 'CISTERNA_A') {
-            // VISTA CISTERNA A: Inicia colapsada por default y tiene botón Mostrar
             card.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
@@ -427,11 +417,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
         } else {
-            // VISTA CISTERNA C (Y Aguas Negras)
-            // Agregamos Fecha/Hora debajo del título solo para Cisterna C
             const dateHtml = id === 'CISTERNA_C' ? `<div style="font-size:12px; color:#007acc; font-weight:bold; margin-top:2px; margin-bottom:8px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs</div>` : '';
 
             card.innerHTML = `
+                ${injectedFilters}
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
                         <h2 class="cistern-name" style="margin:0; font-size:16px;">${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}</h2>
@@ -456,8 +445,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
                             ${fillPercentage}% Lleno
                         </div>
-                        <!-- NUEVO BOTÓN DE HISTOGRAMA -->
-                        <button id="toggleChartBtnC" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;">
+                        <!-- BOTÓN DINÁMICO CON ID ÚNICO -->
+                        <button id="toggleChartBtn_${id}" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;">
                             📊 Promedio por Hora
                         </button>
                     </div>
@@ -485,7 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         container.appendChild(card);
 
-        // --- LÓGICA DEL BOTÓN COLAPSAR CISTERNA A ---
+        // Lógica Colapsar Cisterna A
         if (id === 'CISTERNA_A') {
             setTimeout(() => {
                 const btnToggleA = document.getElementById('toggleCisternaA');
@@ -495,7 +484,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (bodyCisternaA.style.display === 'none') {
                             bodyCisternaA.style.display = 'block';
                             btnToggleA.innerHTML = '👁️ Ocultar';
-                            // Disparamos un resize para que Plotly recalcule los anchos si estaba escondido
                             window.dispatchEvent(new Event('resize')); 
                         } else {
                             bodyCisternaA.style.display = 'none';
@@ -506,26 +494,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 50);
         }
 
-        // --- LÓGICA DEL BOTÓN DE HISTOGRAMA (CISTERNA C) ---
-        if (id === 'CISTERNA_C') {
+        // --- EVENT LISTENER INDEPENDIENTE PARA CADA BOTÓN (C y B) ---
+        if (id === 'CISTERNA_C' || id === 'CISTERNA_B') {
             setTimeout(() => {
-                const btnToggle = document.getElementById('toggleChartBtnC');
+                const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
                 if (btnToggle) {
-                    // Leemos la memoria por si la página se acaba de auto-recargar
-                    window.isHourlyBarChartC = sessionStorage.getItem('isHourlyBarChartC') === 'true';
+                    window.isHourlyBarChart = window.isHourlyBarChart || {};
+                    window.isHourlyBarChart[id] = sessionStorage.getItem(`isHourlyBarChart_${id}`) === 'true';
                     
                     const updateBtnUI = () => {
-                        btnToggle.innerHTML = window.isHourlyBarChartC ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
-                        btnToggle.style.backgroundColor = window.isHourlyBarChartC ? '#e0f7fa' : '#f8f9fa';
+                        btnToggle.innerHTML = window.isHourlyBarChart[id] ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
+                        btnToggle.style.backgroundColor = window.isHourlyBarChart[id] ? '#e0f7fa' : '#f8f9fa';
                     };
                     updateBtnUI();
 
                     btnToggle.addEventListener('click', () => {
-                        window.isHourlyBarChartC = !window.isHourlyBarChartC;
-                        sessionStorage.setItem('isHourlyBarChartC', window.isHourlyBarChartC); // Guardamos estado
+                        window.isHourlyBarChart[id] = !window.isHourlyBarChart[id];
+                        sessionStorage.setItem(`isHourlyBarChart_${id}`, window.isHourlyBarChart[id]); 
                         updateBtnUI();
                         
-                        // Buscamos cuántas horas estamos visualizando actualmente y repintamos
                         const activeBtn = document.querySelector('.filter-btn.active');
                         const currentHours = activeBtn ? parseInt(activeBtn.dataset.hours) : 24;
                         updateCharts(currentHours);
@@ -537,7 +524,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
 
-        // Ajuste en Telegram: Omitimos los detalles irrelevantes de Cisterna A
         if (id === 'CISTERNA_A') {
             telegramCaption += `🔵 *[${geo.name} - Control]*\n`;
             telegramCaption += `Nivel espejo: ${currentDist.toFixed(2)} m | ${batteryText}\n\n`;
@@ -546,7 +532,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
             const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
             
-            // Textos monetarios (vacíos si es Aguas Negras)
             const telegramMoneyText = id !== 'CISTERNA_B' ? ` (~$${costoPorHoraMXN.toLocaleString('es-MX')} MXN)` : '';
             const telegramMoneyUltimaHora = id !== 'CISTERNA_B' ? ` (~$${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)` : '';
 
@@ -562,6 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateCharts(24);
 
+    // Activamos los botones inyectados en la Cisterna C
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
