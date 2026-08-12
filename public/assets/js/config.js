@@ -26,7 +26,7 @@ const APP_CONFIG = {
             lat: "19.370417", lng: "-99.265275"
         },
         "CISTERNA_B": {
-            name: "Cisterna B (Aguas Negras)",
+            name: "Cisterna B (Aguas Servidas)",
             sensor_id: "SMAWA_B",
             height_m: 2.40,
             area_m2: 127.4, 
