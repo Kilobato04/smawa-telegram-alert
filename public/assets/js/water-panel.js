@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const filterHtml = `
         <div style="text-align: center; margin-bottom: 15px; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px;">
             <h2 style="margin: 0; font-size: 14px; color: #333; text-transform: uppercase;">Monitoreo de Red Cisternas Ibero CDMX</h2>
-            <div style="font-size: 13px; color: #007acc; font-weight: bold; margin-top: 4px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs</div>
+            <div style="font-size: 13px; color: #007acc; font-weight: bold; margin-top: 4px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} </div>
         </div>
         <div class="time-filters" style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn" data-hours="168">7 Días</button>
