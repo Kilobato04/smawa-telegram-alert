@@ -1,10 +1,7 @@
 // --- FUNCIONES MATEMÁTICAS Y DE FECHAS ---
 function calcVolume(sensorDist, geo) {
-    // Al ser PIEZÓMETRO, la lectura (sensorDist) es directamente el NIVEL de agua.
-    // Usamos Math.min para topar el cálculo a la altura máxima de la cisterna en caso de picos de ruido en el sensor.
     const level = Math.min(sensorDist, geo.height_m); 
     const volumeM3 = level * geo.area_m2;
-    
     return { m3: volumeM3, liters: volumeM3 * 1000 };
 }
 
@@ -40,12 +37,9 @@ async function fetchLatestBattery(token) {
     try {
         const response = await fetch(url);
         const data = await response.json();
-        if (data && data.length > 0) {
-            return parseFloat(data[data.length - 1].Data);
-        }
+        if (data && data.length > 0) return parseFloat(data[data.length - 1].Data);
         return null;
     } catch (error) {
-        console.error("Error consultando Batería:", error);
         return null;
     }
 }
@@ -53,11 +47,9 @@ async function fetchLatestBattery(token) {
 function processApiData(apiRawData, geo, cisternId) {
     const times = [];
     const distances = [];
-    
     if (!apiRawData || apiRawData.length === 0) return { valid: false };
 
     let lastTime = null;
-    // Límite de tiempo: Si no hay datos en 15 minutos, rompe la línea en la gráfica
     const MAX_GAP_MS = 15 * 60 * 1000; 
 
     apiRawData.forEach(item => {
@@ -66,21 +58,15 @@ function processApiData(apiRawData, geo, cisternId) {
 
         if (!isNaN(rawDist)) {
             let dist = rawDist;
-            
-            // --- NUEVA ECUACIÓN DE CALIBRACIÓN IDEAL ---
-            if (cisternId === "CISTERNA_A") {
-                dist = (rawDist * 0.8478) + 0.5709;
-            }
-            
+            if (cisternId === "CISTERNA_A") dist = (rawDist * 0.8478) + 0.5709;
             if (dist < 0.1) dist = 0.1; 
             if (dist > geo.height_m) dist = geo.height_m; 
 
-            // Lógica para detectar vacíos de conexión (Inyección de null)
             if (lastTime !== null) {
                 let diff = currentTime.getTime() - lastTime.getTime();
                 if (diff > MAX_GAP_MS) {
                     times.push(new Date(lastTime.getTime() + 1000)); 
-                    distances.push(null); // Obliga a Plotly a romper el trazo
+                    distances.push(null); 
                 }
             }
 
@@ -110,7 +96,6 @@ function analyzeMetrics(series, geo) {
         const t = p.time.getTime();
         if (t >= last24hStart) {
             if (prevD !== null) {
-                // FILTRO DE RUIDO: Tolerar variaciones menores a 1.5 cm
                 if ((p.dist - prevD) > 0.015) { 
                     let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
                     totalConsumption24h += Math.abs(diffL);
@@ -118,9 +103,7 @@ function analyzeMetrics(series, geo) {
                 } else if ((prevD - p.dist) > 0.015) { 
                     prevD = p.dist;
                 }
-            } else {
-                prevD = p.dist;
-            }
+            } else { prevD = p.dist; }
         }
         if (t >= last12hStart) {
             if (Math.abs(p.dist - validPoints[lastIdx].dist) > 0.015) isStuck12h = false;
@@ -130,16 +113,13 @@ function analyzeMetrics(series, geo) {
     return { isStuck: isStuck12h, avgHourlyConsumption: totalConsumption24h / 24 };
 }
 
-// Variable global para almacenar los datos de las gráficas
 window.chartDataStore = {};
 
 function updateCharts(hours) {
-    // 🔥 Detectamos si la página la abrió la Lambda de AWS
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
     const realNowMs = new Date().getTime();
-    // Si es el bot (UTC), le restamos 6 horas a la gráfica. Si eres tú, se queda igual.
     const nowMs = isBot ? realNowMs - (6 * 3600 * 1000) : realNowMs;
     const startMs = nowMs - (hours * 3600 * 1000);
     
@@ -147,7 +127,6 @@ function updateCharts(hours) {
     window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
-        // Inicializamos desde memoria si no existe para este ID
         if (window.isHourlyBarChart[id] === undefined) {
             window.isHourlyBarChart[id] = sessionStorage.getItem(`isHourlyBarChart_${id}`) === 'true';
         }
@@ -169,96 +148,65 @@ function updateCharts(hours) {
         let finalY = filteredY;
         let chartType = 'scatter';
         let chartMode = 'lines';
-        let chartProps = {
-            connectgaps: false, 
-            line: { color: data.geo.color, width: 2 },
-            fill: 'tozeroy',
-            fillcolor: `${data.geo.color}22`
-        };
+        let chartProps = { connectgaps: false, line: { color: data.geo.color, width: 2 }, fill: 'tozeroy', fillcolor: `${data.geo.color}22` };
 
-        // --- HISTOGRAMA INDEPENDIENTE (CISTERNA C y B) ---
         if (window.isHourlyBarChart[id]) {
             const hourlyData = {};
-            
             for (let i = 0; i < filteredX.length; i++) {
                 if (filteredY[i] === null) continue;
-                
-                // Redondeamos la fecha al inicio de la hora exacta (ej. 14:35 -> 14:00)
                 const d = new Date(filteredX[i]);
                 d.setMinutes(0, 0, 0);
                 const ts = d.getTime();
-                
                 if (!hourlyData[ts]) { hourlyData[ts] = { sum: 0, count: 0 }; }
                 hourlyData[ts].sum += filteredY[i];
                 hourlyData[ts].count += 1;
             }
-            
             finalX = [];
             finalY = [];
-            
-            // Promediamos los ~12 puntos de cada hora
             Object.keys(hourlyData).sort().forEach(ts => {
-                const avgVolume = hourlyData[ts].sum / hourlyData[ts].count;
                 finalX.push(new Date(parseInt(ts)));
-                finalY.push(avgVolume);
+                finalY.push(hourlyData[ts].sum / hourlyData[ts].count);
             });
-            
-            // Cambiamos el estilo a Histograma
             chartType = 'bar';
             chartMode = undefined;
-            chartProps = {
-                marker: { color: data.geo.color, opacity: 0.8 }
-            };
+            chartProps = { marker: { color: data.geo.color, opacity: 0.8 } };
         }
 
-        // Recalculamos Mínimos y Máximos Dinámicos
-        let minY = Infinity;
-        let maxY = -Infinity;
+        let minY = Infinity; let maxY = -Infinity;
         for (let i = 0; i < finalY.length; i++) {
             if (finalY[i] !== null) {
                 if (finalY[i] < minY) minY = finalY[i];
                 if (finalY[i] > maxY) maxY = finalY[i];
             }
         }
-
         if (minY === Infinity) { minY = 0; maxY = 10; }
-
-        const rangeDiff = maxY - minY;
-        const padding = rangeDiff === 0 ? maxY * 0.05 : rangeDiff * 0.1; 
+        const padding = (maxY - minY) === 0 ? maxY * 0.05 : (maxY - minY) * 0.1; 
         const yRange = [Math.max(0, minY - padding), maxY + padding];
 
-        // --- RENDERIZADO FINAL ---
         Plotly.newPlot(`chart_${id}`, [{
-            x: finalX,
-            y: finalY,
-            type: chartType,
-            mode: chartMode,
-            ...chartProps
+            x: finalX, y: finalY, type: chartType, mode: chartMode, ...chartProps
         }], {
             margin: { t: 10, b: 25, l: 40, r: 10 },
-            xaxis: { 
-                range: [new Date(startMs), new Date(nowMs)], 
-                showgrid: true, gridcolor: '#eee', 
-                tickformat: xAxisFormat,
-                tickangle: 0, 
-                tickfont: { size: 9, color: '#888' } 
-            },
-            yaxis: { 
-                range: yRange, 
-                title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, 
-                showgrid: true, gridcolor: '#eee', 
-                tickfont: { size: 9, color: '#888' } 
-            },
+            xaxis: { range: [new Date(startMs), new Date(nowMs)], showgrid: true, gridcolor: '#eee', tickformat: xAxisFormat, tickangle: 0, tickfont: { size: 9, color: '#888' } },
+            yaxis: { range: yRange, title: { text: 'Vol (m³)', font: {size: 10, color: '#888'} }, showgrid: true, gridcolor: '#eee', tickfont: { size: 9, color: '#888' } },
             staticPlot: true
-        }, {
-            displayModeBar: false,  // Ocultar herramientas al hacer hover
-            responsive: true
-        });
+        }, { displayModeBar: false, responsive: true });
     });
 }
 
-// --- RENDERIZADO PRINCIPAL ---
 document.addEventListener('DOMContentLoaded', async () => {
+    // --- PANTALLA DE CARGA INICIAL (LOADER) ---
+    const loader = document.createElement('div');
+    loader.id = 'smawa-loader';
+    loader.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(244, 247, 246, 0.95); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(3px);">
+            <div style="width: 45px; height: 45px; border: 4px solid #e0e0e0; border-top: 4px solid #007acc; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="margin-top: 15px; font-weight: 600; color: #007acc; font-family: sans-serif; font-size: 14px;">Consultando datos...</div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        </div>
+    `;
+    document.body.appendChild(loader);
+
     console.log('⏰ Configurando actualización sincronizada...');
     
     function scheduleNextReload() {
@@ -269,16 +217,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     scheduleNextReload();
 
-    // 1. Ocultar el encabezado original por completo
+    // Ocultar el encabezado original por completo
     const header = document.querySelector('.header');
     if (header) {
         header.style.display = 'none';
     }
 
     const container = document.getElementById('cisternsGrid');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBot = urlParams.get('bot') === 'true';
+
+    const nowReal = new Date();
+    // Ajuste condicional: Si es el bot (AWS), le restamos 6 horas para empatar con CDMX
+    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
     
-    // Filtros HTML, ahora los vamos a inyectar dentro de Cisterna C en lugar de volando
+    // Si es bot, forzamos UTC en las opciones para que el navegador de AWS no intente reajustar nada
+    const options = { 
+        timeZone: isBot ? 'UTC' : undefined, 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+    };
+    const formattedDate = nowMx.toLocaleDateString('es-MX', options);
+
+    // --- ENCABEZADO Y FILTROS INTEGRADOS ---
     const filterHtml = `
+        <div style="text-align: center; margin-bottom: 15px; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px;">
+            <h2 style="margin: 0; font-size: 14px; color: #333; text-transform: uppercase;">Monitoreo de Red Cisternas Ibero CDMX</h2>
+            <div style="font-size: 13px; color: #007acc; font-weight: bold; margin-top: 4px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs</div>
+        </div>
         <div class="time-filters" style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn" data-hours="168">7 Días</button>
             <button class="filter-btn active" data-hours="24">24 Hrs</button>
@@ -297,21 +263,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter-btn.active:hover { background: #005999; }
     `;
     document.head.appendChild(style);
-
-    // 🔥 Detectamos al bot para la fecha impresa en el frontend
-    const urlParams = new URLSearchParams(window.location.search);
-    const isBot = urlParams.get('bot') === 'true';
-
-    const nowReal = new Date();
-    // Ajuste condicional: Si es el bot (AWS), le restamos 6 horas para empatar con CDMX
-    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
-    
-    // Si es bot, forzamos UTC en las opciones para que el navegador de AWS no intente reajustar nada
-    const options = { 
-        timeZone: isBot ? 'UTC' : undefined, 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-    };
-    const formattedDate = nowMx.toLocaleDateString('es-MX', options);
     
     let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
@@ -421,7 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">📍 ${geo.lat}, ${geo.lng} ↗</a>
                         </p>
                         <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                            📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
+                            📏 Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
                         </p>
                     </div>
                     <div>
@@ -433,19 +384,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
         } else {
-            const dateHtml = id === 'CISTERNA_C' ? `<div style="font-size:12px; color:#007acc; font-weight:bold; margin-top:2px; margin-bottom:8px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs</div>` : '';
-
             card.innerHTML = `
                 ${injectedFilters}
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
                     <div>
                         <h2 class="cistern-name" style="margin:0; font-size:16px;">${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}</h2>
-                        ${dateHtml}
                         <p style="margin:3px 0; font-size:11px;">
                             <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;">📍 ${geo.lat}, ${geo.lng} ↗</a>
                         </p>
                         <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                            📏 Espejo de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
+                            📏 Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
                         </p>
                         <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
                             Max: ${geo.max_capacity_l.toLocaleString()} L | ${sensorHtml}
@@ -461,7 +409,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div style="font-size: 14px; font-weight: bold; color: ${geo.color}; margin-top: 2px;">
                             ${fillPercentage}% Lleno
                         </div>
-                        <!-- BOTÓN DINÁMICO CON ID ÚNICO -->
                         <button id="toggleChartBtn_${id}" style="margin-top: 8px; padding: 4px 8px; font-size: 11px; background-color: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s;">
                             📊 Promedio por Hora
                         </button>
@@ -542,7 +489,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (id === 'CISTERNA_A') {
             telegramCaption += `🔵 *[${geo.name} - Control]*\n`;
-            telegramCaption += `Nivel espejo: ${currentDist.toFixed(2)} m | ${batteryText}\n\n`;
+            telegramCaption += `Nivel espejo: ${currentDist.toFixed(2)} m | ${batteryText}\n\n`; // Nota: En Telegram mantenemos tu formato original para no romper límites, pero si prefieres también puedes cambiarlo.
         } else {
             const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
             const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
@@ -572,6 +519,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateCharts(hrs);
         });
     });
+
+    // --- REMOVER PANTALLA DE CARGA ---
+    const loaderEl = document.getElementById('smawa-loader');
+    if (loaderEl) loaderEl.remove();
 
     window.telegramCaption = telegramCaption;
     setTimeout(() => { window.dashboardReady = true; }, 1000); 
