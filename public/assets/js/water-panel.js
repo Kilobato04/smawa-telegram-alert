@@ -136,8 +136,8 @@ function updateCharts(hours) {
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    const realNowMs = new Date().getTime();
-    const nowMs = isBot ? realNowMs - (6 * 3600 * 1000) : realNowMs;
+    // 🔥 Limpieza: Ya no restamos horas porque Puppeteer está en CDMX
+    const nowMs = new Date().getTime();
     const startMs = nowMs - (hours * 3600 * 1000);
     
     const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
@@ -245,11 +245,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    const nowReal = new Date();
-    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
-    
+    // 🔥 Limpieza: Fecha nativa impecable
+    const nowMx = new Date(); 
     const options = { 
-        timeZone: isBot ? 'UTC' : undefined, 
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
     };
     const formattedDate = nowMx.toLocaleDateString('es-MX', options);
