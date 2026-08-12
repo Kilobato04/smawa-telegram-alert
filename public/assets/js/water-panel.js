@@ -127,10 +127,14 @@ function updateCharts(hours) {
     window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
-        // 🔥 NUEVO: Por defecto es TRUE (Promedio por Hora) si no hay nada guardado
+        // 🔥 FIX BLINDADO: Si es el bot (AWS), SIEMPRE usa barras para evitar Timeout.
         if (window.isHourlyBarChart[id] === undefined) {
-            const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
-            window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
+            if (isBot) {
+                window.isHourlyBarChart[id] = true;
+            } else {
+                const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
+                window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
+            }
         }
 
         const data = window.chartDataStore[id];
@@ -465,9 +469,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
                 if (btnToggle) {
                     // 🔥 NUEVO: Mantenemos la misma lógica del TRUE por defecto para los botones
+                    // 🔥 Mismo blindaje para la interfaz
                     window.isHourlyBarChart = window.isHourlyBarChart || {};
-                    const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
-                    window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
+                    if (isBot) {
+                        window.isHourlyBarChart[id] = true;
+                    } else {
+                        const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
+                        window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
+                    }
                     
                     const updateBtnUI = () => {
                         btnToggle.innerHTML = window.isHourlyBarChart[id] ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
