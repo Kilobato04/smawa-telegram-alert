@@ -10,7 +10,7 @@ function formatDateForApi(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-// --- ICONOS SVG (Reemplazo de Emojis para asegurar persistencia en Puppeteer) ---
+// --- ICONOS SVG (Reemplazo total de Emojis para AWS Puppeteer) ---
 const ICONS = {
     pin: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`,
     ruler: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3l-7.6-7.6a2 2 0 0 0-2.8 0l-1.4 1.4a2 2 0 0 0 0 2.8l7.6 7.6a2 2 0 0 0 2.8 0l1.4-1.4a2 2 0 0 0 0-2.8z"></path><path d="M14.5 10.5L11 14"></path><path d="M17.5 13.5L14 17"></path></svg>`,
@@ -23,7 +23,8 @@ const ICONS = {
     down: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`,
     warning: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d35400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
     check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
-    globe: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`
+    globe: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`,
+    calendar: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`
 };
 
 // --- FETCH HISTÓRICO ---
@@ -143,7 +144,6 @@ function updateCharts(hours) {
     window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
-        // FIX BLINDADO: Si es el bot (AWS), SIEMPRE usa barras para evitar Timeout.
         if (window.isHourlyBarChart[id] === undefined) {
             if (isBot) {
                 window.isHourlyBarChart[id] = true;
@@ -203,7 +203,7 @@ function updateCharts(hours) {
         }
         if (minY === Infinity) { minY = 0; maxY = 10; }
         const padding = (maxY - minY) === 0 ? maxY * 0.05 : (maxY - minY) * 0.1; 
-        const yRange = [Math.max(0, minY - padding), Math.max(0.1, maxY + padding)]; // Prevent top boundary compression
+        const yRange = [Math.max(0, minY - padding), Math.max(0.1, maxY + padding)];
 
         Plotly.newPlot(`chart_${id}`, [{
             x: finalX, y: finalY, type: chartType, mode: chartMode, ...chartProps
@@ -256,7 +256,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Ajuste condicional: Si es el bot (AWS), le restamos 6 horas para empatar con CDMX
     const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
     
-    // Si es bot, forzamos UTC en las opciones para que el navegador de AWS no intente reajustar nada
     const options = { 
         timeZone: isBot ? 'UTC' : undefined, 
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
@@ -266,8 +265,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- ENCABEZADO Y FILTROS INTEGRADOS ---
     const filterHtml = `
         <div style="text-align: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-top: 10px;">
-            <h2 style="margin: 0; font-size: 16px; color: #ffffff; text-transform: uppercase;">Monitoreo de Red Cisternas Ibero CDMX</h2>
-            <div style="font-size: 13px; color: #64ffda; font-weight: bold; margin-top: 4px;">📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} </div>
+            <h2 style="margin: 0; font-size: 18px; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Monitoreo de Red Cisternas Ibero CDMX</h2>
+            <div style="font-size: 13px; color: #64ffda; font-weight: bold; margin-top: 6px; display: flex; justify-content: center; align-items: center;">
+                <span class="svg-icon" style="margin-right: 6px;">${ICONS.calendar}</span> ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} 
+            </div>
         </div>
         <div class="time-filters" style="display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap;">
             <button class="filter-btn" data-hours="168">7 Días</button>
@@ -287,16 +288,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter-btn:hover { background: rgba(100, 255, 218, 0.1); }
         .filter-btn.active:hover { background: #52e0c4; }
         
-        /* 🔥 NUEVO: REGLAS ESTÉTICAS Y DE RESPONSIVIDAD 🔥 */
+        /* 🔥 NUEVO: ELIMINACIÓN DEL FONDO GRIS Y FUSIÓN DE FONDOS 🔥 */
         * { box-sizing: border-box; } 
+        
         body, html { 
             margin: 0; 
             padding: 0; 
             overflow-x: hidden; 
             width: 100%; 
-            /* Fondo azul navy degradado elegante */
-            background: linear-gradient(135deg, #0a192f 0%, #1a365d 100%);
+            background: linear-gradient(135deg, #0a192f 0%, #1a365d 100%) !important;
             min-height: 100vh;
+        }
+
+        /* Eliminamos fondos grises de contenedores padres para que se vea el navy */
+        .container, .main-container, .wrap, section, main {
+            background: transparent !important;
+            box-shadow: none !important;
         }
         
         #cisternsGrid { 
@@ -307,14 +314,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             display: flex; 
             flex-direction: column; 
             align-items: center; 
+            background: transparent !important; /* Asegura fusión total */
         }
         
         .cistern-card { 
             width: 100% !important; 
-            background: #ffffff; /* Fondo blanco puro para contraste */
+            background: #ffffff; 
             margin-bottom: 15px !important;
-            border-radius: 12px !important; /* Bordes redondeados restaurados */
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); /* Sombra suave para separar del fondo oscuro */
+            border-radius: 12px !important; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
             padding: 15px;
             overflow: hidden !important; 
         }
@@ -322,7 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .js-plotly-plot, .plot-container, .svg-container, .main-svg { 
             width: 100% !important; 
             max-width: 100% !important; 
-            min-width: 0 !important; /* Fix de desbordamiento de Plotly */
+            min-width: 0 !important; 
         }
 
         /* Utilidad para alinear SVG con texto */
@@ -331,6 +339,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             align-items: center;
             vertical-align: middle;
             margin-right: 4px;
+        }
+        .svg-icon svg {
+            display: block;
         }
 
         @media (max-width: 480px) {
@@ -348,9 +359,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
         document.head.appendChild(meta);
     }
-    
-    // Generación del texto base para Telegram
-    let telegramCaption = `💧 *Reporte SMAWA - IBERO CDMX*\n📅 ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} hrs\n\n`;
 
     const activeCisternKeys = Object.keys(APP_CONFIG.GEOMETRY)
         .filter(id => APP_CONFIG.GEOMETRY[id].sensor_id !== null)
@@ -376,19 +384,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { id, geo, apiRawData, batteryVal } = res;
         const series = processApiData(apiRawData, geo, id);
         
-        // Uso de SVG Inline en lugar de Emojis
         const batteryText = batteryVal !== null ? `<span class="svg-icon" style="color: #27ae60;">${ICONS.battery}</span> ${batteryVal.toFixed(0)}%` : `<span class="svg-icon">${ICONS.battery}</span> N/A`;
         const mapsUrl = `https://maps.google.com/?q=${geo.lat},${geo.lng}`;
         
-        // Determinar si inyectamos los filtros (solo para la primera tarjeta: Cisterna C)
-        // Como los filtros están ahora fuera del card para afectar el título principal, se insertan directo al contenedor
         if (id === 'CISTERNA_C') {
             container.insertAdjacentHTML('beforeend', filterHtml);
         }
 
         if (!series.valid) {
             container.innerHTML += `<div class="cistern-card"><h2 class="cistern-name">${geo.name}</h2><div class="sensor-warning"><span class="svg-icon">${ICONS.warning}</span> Sin datos recientes</div></div>`;
-            telegramCaption += `*[${geo.name}](${mapsUrl})*\n⚠️ Sensor sin datos recientes.\n\n`;
             continue;
         }
 
@@ -529,7 +533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="metric-box">
                         <div style="color:#666; font-size:11px; margin-bottom:4px;">ÚLTIMA HORA</div>
                         <div class="${flowClass} font-weight-bold" style="display:flex; align-items:center;">
-                            ${isStable ? `<span class="svg-icon">${ICONS.stable}</span>` : (isPositive ? `<span class="svg-icon">${ICONS.up}</span>` : `<span class="svg-icon">${ICONS.down}</span>`)}
+                            ${isStable ? `<span class="svg-icon">${ICONS.stable}</span>` : (isPositive ? `<span class="svg-icon" style="color: #27ae60;">${ICONS.up}</span>` : `<span class="svg-icon" style="color: #e74c3c;">${ICONS.down}</span>`)}
                             ${flowStatusText} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L
                         </div>
                         ${moneyHtmlUltimaHora}
@@ -565,7 +569,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             btnToggleA.innerHTML = `<span class="svg-icon">${ICONS.eye}</span> Ocultar`;
                             if (btnChartA) btnChartA.style.display = 'block'; 
                             
-                            // Solo redimensionamos la gráfica A
                             setTimeout(() => {
                                 if (window.Plotly) Plotly.Plots.resize(`chart_${id}`);
                             }, 50);
@@ -614,27 +617,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const volumeSeries = series.dist.map(dist => dist !== null ? calcVolume(dist, geo).m3 : null);
         window.chartDataStore[id] = { geo: geo, x: series.x, y: volumeSeries };
-
-        // Telegram original strings just in case needed as fallback, but we will use the botData structure preferred
-        if (id === 'CISTERNA_A') {
-            telegramCaption += `🔵 *[${geo.name} - Control]*\n`;
-            telegramCaption += `Nivel espejo: ${currentDist.toFixed(2)} m | ${batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A'}\n\n`; 
-        } else {
-            const emojiStatus = isStable ? '⚖️' : (isPositive ? '⬆️' : '⬇️');
-            const emojiColor = id === 'CISTERNA_B' ? '🟣' : '🔵';
-            const telegramSensorStatus = analysis.isStuck ? '⚠️ Alerta (Sin variación en 12h)' : '✅ Operativo';
-            
-            const telegramMoneyText = id !== 'CISTERNA_B' ? ` (~$${costoPorHoraMXN.toLocaleString('es-MX')} MXN)` : '';
-            const telegramMoneyUltimaHora = id !== 'CISTERNA_B' ? ` (~$${costoUltimaHoraMXN.toLocaleString('es-MX')} MXN)` : '';
-
-            telegramCaption += `${emojiColor} *[${id === 'CISTERNA_C' ? geo.name + ' (Total Unificado)' : geo.name}]*\n`;
-            telegramCaption += `Nivel actual: ${fillPercentage}% | ${batteryVal !== null ? `🔋 ${batteryVal.toFixed(0)}%` : '🔋 N/A'}\n`;
-            telegramCaption += `Última hora: ${flowStatusText} ${emojiStatus} ${sign}${Math.abs(flowL).toLocaleString('es-MX', {maximumFractionDigits: 0})} L${telegramMoneyUltimaHora}\n`;
-            telegramCaption += `Volumen: ${currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0})} L (${currentVol.m3.toLocaleString('es-MX', {maximumFractionDigits: 1})} m³)\n`;
-            telegramCaption += `Autonomía est.: ${autonomyText}\n`;
-            telegramCaption += `Tasa de gasto: ${analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0})} L/h${telegramMoneyText}\n`;
-            telegramCaption += `Estado Sensor: ${telegramSensorStatus}\n\n`;
-        }
     }
 
     updateCharts(24);
@@ -651,6 +633,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loaderEl = document.getElementById('smawa-loader');
     if (loaderEl) loaderEl.remove();
 
-    window.telegramCaption = telegramCaption;
+    // 🔥 GENERACIÓN DEL MENSAJE DE TELEGRAM AL FINALIZAR EL BUCLE 🔥
+    const pad2 = (n) => n.toString().padStart(2, '0');
+    const captionDate = `${pad2(nowMx.getDate())}/${pad2(nowMx.getMonth() + 1)}/${nowMx.getFullYear()}, ${pad2(nowMx.getHours())}:${pad2(nowMx.getMinutes())}`;
+
+    const c_perc = window.botTelegramData.C?.porcentaje || '--';
+    const c_lit = window.botTelegramData.C?.litros || '--';
+    const c_aut = window.botTelegramData.C?.autonomia || '--';
+    const b_perc = window.botTelegramData.B?.porcentaje || '--';
+    const b_gas = window.botTelegramData.B?.gastoPromedio || '--';
+
+    window.telegramCaption = `💧 *Reporte de Nivel Red de Cisternas IBERO CDMX*
+Estado actual de las reservas de agua:
+
+🔵 *Agua Potable (Cisterna C - Total):*
+Nivel al ${c_perc}% (${c_lit} L). Autonomía: ${c_aut}.
+
+🟢 *Aguas Servidas (Cisterna B):*
+Nivel al ${b_perc}%. Gasto promedio: ${b_gas} L/h.
+
+🔗 [Ver Panel Interactivo Web](https://smawatelegram.netlify.app)
+_${captionDate} (CDMX)_`;
+
     setTimeout(() => { window.dashboardReady = true; }, 1000); 
 });
