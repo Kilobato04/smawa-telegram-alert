@@ -1,6 +1,5 @@
 /* === VARIABLES BASE === */
 :root {
-    --bg-color: #f4f7f6;
     --card-bg: #ffffff;
     --primary-blue: #007acc;
     --text-main: #333333;
@@ -22,56 +21,47 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-body {
+/* 🔥 NUEVO FONDO NAVY GLOBAL 🔥 */
+body, html {
     margin: 0; 
+    padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: var(--bg-color); 
+    background: linear-gradient(135deg, #0a192f 0%, #1a365d 100%) !important;
+    min-height: 100vh;
     display: flex; 
-    justify-content: center; 
-    padding: 20px;
+    justify-content: center;
+    color: #ffffff;
 }
 
-.dashboard { 
-    width: 600px; 
-    background: var(--bg-color); 
+/* Eliminamos los anchos fijos y los fondos grises que rompían el diseño */
+.dashboard, .container, .main-container, .wrap, section, main { 
+    width: 100%;
+    max-width: 800px; 
+    background: transparent !important; 
+    box-shadow: none !important;
+    padding: 10px;
 }
 
-/* === TARJETAS Y CONTENEDORES (Estilo "Apple") === */
-.header { 
-    background: var(--card-bg); 
-    padding: 15px; 
-    text-align: center; 
-    margin-bottom: 15px; 
-    /* Mejoras visuales: */
-    border-radius: 16px; 
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08); 
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    animation: fadeIn 0.4s ease;
+#cisternsGrid { 
+    width: 100% !important; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    background: transparent !important; 
 }
 
-.header h1 { 
-    margin: 0; 
-    font-size: 20px; 
-    color: var(--text-main); 
-}
-
-#updateTime {
-    margin: 5px 0 0 0; 
-    font-size: 13px; 
-    color: var(--text-muted); 
-    font-weight: 500;
-}
-
+/* === TARJETAS Y CONTENEDORES === */
 .cistern-card { 
     background: var(--card-bg); 
+    width: 100% !important;
     padding: 15px; 
-    margin-bottom: 15px; 
-    /* Mejoras visuales: */
-    border-radius: 16px; 
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    margin-bottom: 15px !important; 
+    border-radius: 12px !important; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+    border: none !important;
     animation: fadeIn 0.6s ease;
-    overflow: hidden;
+    overflow: hidden !important; 
+    color: var(--text-main);
 }
 
 /* === NUEVO: CAJAS PARA MÉTRICAS INFERIORES === */
@@ -86,49 +76,37 @@ body {
     justify-content: center;
 }
 
+/* === BOTONES DE FILTRO === */
+.time-filters { display:flex; justify-content:center; gap:8px; margin-bottom:15px; flex-wrap: wrap; }
+.filter-btn { padding: 5px 12px; border: 1px solid #64ffda; background: transparent; color: #64ffda; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; outline: none;}
+.filter-btn.active { background: #64ffda; color: #0a192f; border-color: #64ffda; }
+.filter-btn:hover { background: rgba(100, 255, 218, 0.1); }
+.filter-btn.active:hover { background: #52e0c4; }
+
+/* === PLOTLY OVERRIDES === */
+.js-plotly-plot, .plot-container, .svg-container, .main-svg { 
+    width: 100% !important; 
+    max-width: 100% !important; 
+    min-width: 0 !important; 
+}
+.svg-icon { display: inline-flex; align-items: center; vertical-align: middle; margin-right: 4px; }
+.svg-icon svg { display: block; }
+
 /* === TIPOGRAFÍAS Y ESTADOS === */
-.location-text { 
-    font-size: 10px; 
-    color: #888; 
-    margin-top: 4px; 
-}
-
-.volume-display { 
-    font-size: 20px; 
-    font-weight: bold; 
-    color: var(--primary-blue); 
-}
-
-.flow-status { 
-    font-weight: bold; 
-    font-size: 13px; 
-}
-
+.location-text { font-size: 10px; color: #888; margin-top: 4px; }
+.volume-display { font-size: 20px; font-weight: bold; color: var(--primary-blue); }
+.flow-status { font-weight: bold; font-size: 13px; }
 .flow-negative { color: var(--alert-red); }
 .flow-positive { color: var(--ok-green); }
-
-.sensor-ok { 
-    color: var(--ok-green); 
-    font-weight: bold; 
-    font-size: 12px; 
-}
-
-.sensor-warning { 
-    background-color: #fdf3e8; 
-    color: var(--warning-yellow); 
-    padding: 4px 8px; 
-    border-radius: 4px; 
-    font-weight: bold; 
-    font-size: 11px; 
-    display: inline-block; 
-    border: 1px solid #fde3c2;
-}
+.sensor-ok { color: var(--ok-green); font-weight: bold; font-size: 12px; display: inline-block; }
+.sensor-warning { background-color: #fdf3e8; color: var(--warning-yellow); padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; border: 1px solid #fde3c2; }
 
 /* === SUAVIZADO PARA BOT DE TELEGRAM (HIGH DPI) === */
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    body {
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
+    body { text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+}
+@media (max-width: 480px) {
+    .volume-display { font-size: 18px !important; }
+    .metric-box { padding: 4px; font-size: 11px; }
+    .filter-btn { padding: 4px 8px; font-size: 11px; }
 }
