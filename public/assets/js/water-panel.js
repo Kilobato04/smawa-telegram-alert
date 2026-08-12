@@ -269,36 +269,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter-btn:hover { background: #e6f2ff; }
         .filter-btn.active:hover { background: #005999; }
         
-        /* 🔥 FIX DEFINITIVO DE RESPONSIVIDAD 🔥 */
+        /* 🔥 NUEVO: REGLAS PARA ESTIRAR DE ORILLA A ORILLA 🔥 */
         * { box-sizing: border-box; } 
         body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; }
         
         #cisternsGrid { 
             width: 100% !important; 
             max-width: 100% !important; 
-            padding: 10px !important; 
+            /* 10px arriba/abajo, 0px a los lados */
+            padding: 10px 0px !important; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
             overflow-x: hidden;
         }
         
-        /* 🔥 AQUÍ ESTÁ LA MAGIA: overflow hidden evita que Plotly rompa la tarjeta hacia los lados */
         .cistern-card { 
             width: 100% !important; 
-            max-width: 600px !important; 
+            max-width: 800px !important; 
             margin-left: 0 !important; 
             margin-right: 0 !important; 
+            border-radius: 0px !important; /* Elimina las esquinas redondeadas para pegar al borde */
+            border-left: none !important;
+            border-right: none !important;
             overflow: hidden !important; 
         }
 
-        /* Domamos al lienzo interno de Plotly a la fuerza bruta */
         .js-plotly-plot, .plot-container, .svg-container, .main-svg { 
             width: 100% !important; 
             max-width: 100% !important; 
         }
 
-        /* Ajuste fino para pantallas de celulares muy pequeñas */
         @media (max-width: 480px) {
             .volume-display { font-size: 18px !important; }
             .metric-box { padding: 4px; font-size: 11px; }
