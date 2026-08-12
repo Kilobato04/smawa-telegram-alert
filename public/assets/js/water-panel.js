@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const footerHtml = id === 'CISTERNA_B' ? `
                 <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee;">
                     <a href="https://smability.io" target="_blank" style="text-decoration: none; color: #666; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; transition: color 0.2s;">
-                        <span style="font-size: 15px;">🌐</span> © ${new Date().getFullYear()} smability.io
+                        <span style="font-size: 15px;"></span> © ${new Date().getFullYear()} smability.io
                     </a>
                 </div>
             ` : '';
