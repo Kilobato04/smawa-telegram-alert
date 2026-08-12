@@ -256,10 +256,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- ENCABEZADO Y FILTROS INTEGRADOS ---
     const filterHtml = `
-        <div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; margin-top: 10px;">
-            <img src="assets/images/logo-smability.png" alt="Smability" style="height: 35px; margin-bottom: 15px; filter: brightness(0) invert(1);">
-            <h2 style="margin: 0; font-size: 18px; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Monitoreo de Red Cisternas Ibero CDMX</h2>
-            <div style="font-size: 13px; color: #64ffda; font-weight: bold; margin-top: 8px; display: flex; justify-content: center; align-items: center;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; margin-top: 10px;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+                <img src="assets/images/logo-smability.png" alt="Smability" style="height: 35px; filter: brightness(0) invert(1);">
+                <h2 style="margin: 0; font-size: 18px; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; text-align: left;">Monitoreo de Red Cisternas IBERO CDMX</h2>
+            </div>
+            <div style="font-size: 13px; color: #ffffff; font-weight: bold; margin-top: 10px; display: flex; justify-content: center; align-items: center;">
                 <span class="svg-icon" style="margin-right: 6px;">${ICONS.calendar}</span> ${formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)} 
             </div>
         </div>
@@ -353,8 +355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         const sensorHtml = analysis.isStuck 
-            ? `<div class="sensor-warning" style="display: inline-block;"><span class="svg-icon">${ICONS.warning}</span> ALERTA: Sin variación 12h</div>` 
-            : `<div class="sensor-ok"><span class="svg-icon">${ICONS.check}</span> Operativo</div>`;
+            ? `<div class="sensor-warning" style="display: inline-block; color: #d35400;"><span class="svg-icon">${ICONS.warning}</span> ALERTA: Sin variación 12h</div>` 
+            : `<div class="sensor-ok" style="display: inline-block; color: #27ae60;"><span class="svg-icon">${ICONS.check}</span> Operativo</div>`;
 
         const TARIFA_AGUA_M3 = 80.00; 
         const costoPorLitro = TARIFA_AGUA_M3 / 1000;
