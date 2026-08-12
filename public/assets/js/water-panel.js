@@ -127,8 +127,10 @@ function updateCharts(hours) {
     window.isHourlyBarChart = window.isHourlyBarChart || {};
 
     Object.keys(window.chartDataStore).forEach(id => {
+        // 🔥 NUEVO: Por defecto es TRUE (Promedio por Hora) si no hay nada guardado
         if (window.isHourlyBarChart[id] === undefined) {
-            window.isHourlyBarChart[id] = sessionStorage.getItem(`isHourlyBarChart_${id}`) === 'true';
+            const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
+            window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
         }
 
         const data = window.chartDataStore[id];
@@ -462,8 +464,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             setTimeout(() => {
                 const btnToggle = document.getElementById(`toggleChartBtn_${id}`);
                 if (btnToggle) {
+                    // 🔥 NUEVO: Mantenemos la misma lógica del TRUE por defecto para los botones
                     window.isHourlyBarChart = window.isHourlyBarChart || {};
-                    window.isHourlyBarChart[id] = sessionStorage.getItem(`isHourlyBarChart_${id}`) === 'true';
+                    const storedVal = sessionStorage.getItem(`isHourlyBarChart_${id}`);
+                    window.isHourlyBarChart[id] = storedVal !== null ? storedVal === 'true' : true;
                     
                     const updateBtnUI = () => {
                         btnToggle.innerHTML = window.isHourlyBarChart[id] ? '📈 Ver Línea de Tiempo' : '📊 Promedio por Hora';
