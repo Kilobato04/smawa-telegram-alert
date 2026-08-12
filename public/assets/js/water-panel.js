@@ -136,8 +136,9 @@ function updateCharts(hours) {
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    // 🔥 Limpieza: Ya no restamos horas porque Puppeteer está en CDMX
-    const nowMs = new Date().getTime();
+    // 🔥 REGRESO DEL TRUCO MATEMÁTICO: Restamos 6 horas si es el bot para alinear Plotly
+    const realNowMs = new Date().getTime();
+    const nowMs = isBot ? realNowMs - (6 * 3600 * 1000) : realNowMs;
     const startMs = nowMs - (hours * 3600 * 1000);
     
     const xAxisFormat = hours > 24 ? '%d/%m %H:%M' : '%H:%M';
@@ -241,13 +242,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     scheduleNextReload();
 
     const container = document.getElementById('cisternsGrid');
-
     const urlParams = new URLSearchParams(window.location.search);
     const isBot = urlParams.get('bot') === 'true';
 
-    // 🔥 Limpieza: Fecha nativa impecable
-    const nowMx = new Date(); 
+    // 🔥 REGRESO DEL TRUCO MATEMÁTICO: Ajuste para el texto del calendario
+    const nowReal = new Date();
+    const nowMx = isBot ? new Date(nowReal.getTime() - (6 * 3600 * 1000)) : nowReal;
+    
     const options = { 
+        timeZone: isBot ? 'UTC' : undefined, 
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
     };
     const formattedDate = nowMx.toLocaleDateString('es-MX', options);
