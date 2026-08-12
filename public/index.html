@@ -2,7 +2,7 @@
 <html lang="es-MX">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dashboard SMAWA - IBERO CDMX</title>
     <!-- Plotly para renderizar las gráficas de 5 días -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -10,20 +10,11 @@
 </head>
 <body>
     <div class="dashboard" id="capturePanel">
-        
-        <div class="header">
-            <!-- Asumiendo que el logo de smability sigue ahí -->
-            <img src="assets/images/logo-smability.png" alt="Smability" style="height: 35px; margin-bottom: 10px;">
-            <h1>Estado de Red de Cisternas SMAWA - IBERO CDMX</h1>
-            <p id="updateTime">Actualizando telemetría...</p>
-        </div>
-
-        <!-- El contenedor donde el script (water-panel.js) inyectará las tarjetas de cada cisterna -->
+        <!-- El contenedor donde el script (water-panel.js) inyectará TODO (Filtros y Tarjetas) -->
         <div id="cisternsGrid"></div>
-        
     </div>
 
-    <!-- Archivos JS separados (Configuración primero, luego la lógica) -->
+    <!-- Archivos JS separados -->
     <script src="assets/js/config.js"></script>
     <script src="assets/js/water-panel.js"></script>
 </body>
