@@ -269,11 +269,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter-btn:hover { background: #e6f2ff; }
         .filter-btn.active:hover { background: #005999; }
         
-        /* 🔥 NUEVO: REGLAS DE RESPONSIVIDAD GLOBAL 🔥 */
+        /* 🔥 FIX DEFINITIVO DE RESPONSIVIDAD 🔥 */
         * { box-sizing: border-box; } 
-        body { margin: 0; padding: 0; overflow-x: hidden; }
+        body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; }
         
-        /* Forzamos el contenedor principal a adaptarse a la pantalla */
         #cisternsGrid { 
             width: 100% !important; 
             max-width: 100% !important; 
@@ -281,14 +280,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             display: flex; 
             flex-direction: column; 
             align-items: center; 
+            overflow-x: hidden;
         }
         
-        /* Forzamos las tarjetas a estirarse llenando el celular */
+        /* 🔥 AQUÍ ESTÁ LA MAGIA: overflow hidden evita que Plotly rompa la tarjeta hacia los lados */
         .cistern-card { 
             width: 100% !important; 
             max-width: 600px !important; 
             margin-left: 0 !important; 
             margin-right: 0 !important; 
+            overflow: hidden !important; 
+        }
+
+        /* Domamos al lienzo interno de Plotly a la fuerza bruta */
+        .js-plotly-plot, .plot-container, .svg-container, .main-svg { 
+            width: 100% !important; 
+            max-width: 100% !important; 
         }
 
         /* Ajuste fino para pantallas de celulares muy pequeñas */
@@ -301,7 +308,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     document.head.appendChild(style);
 
-    // 🔥 NUEVO: Forzamos la etiqueta Viewport por si tu HTML original no la tiene
     if (!document.querySelector('meta[name="viewport"]')) {
         const meta = document.createElement('meta');
         meta.name = 'viewport';
@@ -432,6 +438,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
         } else {
+            // 🔥 NUEVO: Footer corporativo de Smability solo para la Cisterna B
+            const footerHtml = id === 'CISTERNA_B' ? `
+                <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee;">
+                    <a href="https://smability.io" target="_blank" style="text-decoration: none; color: #666; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; transition: color 0.2s;">
+                        <span style="font-size: 15px;">🌐</span> © ${new Date().getFullYear()} smability.io
+                    </a>
+                </div>
+            ` : '';
+
             card.innerHTML = `
                 ${injectedFilters}
                 <div class="card-header" style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
@@ -480,6 +495,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
                 <div id="chart_${id}" style="width:100%; height:160px; margin-top:10px;"></div>
+                ${footerHtml}
             `;
         }
         
