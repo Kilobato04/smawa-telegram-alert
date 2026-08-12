@@ -160,9 +160,14 @@ function updateCharts(hours) {
         
         const multiplier = (id === 'CISTERNA_C') ? 2 : 1;
         
+        // 🔥 FIX DEFINITIVO DEL GAP: Empujamos los datos de la gráfica para que 
+        // se sincronicen visualmente con el borde derecho (nowMs) en AWS.
         for(let i = 0; i < data.x.length; i++) {
-            if(data.x[i].getTime() >= startMs) {
-                filteredX.push(data.x[i]);
+            const dataTime = data.x[i].getTime();
+            const adjustedTime = isBot ? dataTime + (6 * 3600 * 1000) : dataTime;
+
+            if(adjustedTime >= startMs) {
+                filteredX.push(new Date(adjustedTime));
                 filteredY.push(data.y[i] !== null ? (data.y[i] * multiplier) : null);
             }
         }
