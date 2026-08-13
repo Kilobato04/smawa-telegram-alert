@@ -53,7 +53,7 @@ body, html {
 /* === TARJETAS Y CONTENEDORES === */
 .cistern-card { 
     background: var(--card-bg); 
-    width: 790px !important;
+    width: 100% !important; /* 🔥 EL FIX: Cambiamos 790px por 100% para que sea fluido */
     padding: 15px; 
     margin-bottom: 15px !important; 
     border-radius: 12px !important; 
