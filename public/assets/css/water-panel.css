@@ -36,7 +36,7 @@ body, html {
 /* Eliminamos los anchos fijos y los fondos grises que rompían el diseño */
 .dashboard, .container, .main-container, .wrap, section, main { 
     width: 100%;
-    max-width: 780px; 
+    max-width: 790px; 
     background: transparent !important; 
     box-shadow: none !important;
     padding: 0;
@@ -53,7 +53,7 @@ body, html {
 /* === TARJETAS Y CONTENEDORES === */
 .cistern-card { 
     background: var(--card-bg); 
-    width: 780px !important;
+    width: 790px !important;
     padding: 15px; 
     margin-bottom: 15px !important; 
     border-radius: 12px !important; 
