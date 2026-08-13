@@ -36,10 +36,10 @@ body, html {
 /* Eliminamos los anchos fijos y los fondos grises que rompían el diseño */
 .dashboard, .container, .main-container, .wrap, section, main { 
     width: 100%;
-    max-width: 800px; 
+    max-width: 480px; 
     background: transparent !important; 
     box-shadow: none !important;
-    padding: 10px;
+    padding: 0;
 }
 
 #cisternsGrid { 
@@ -53,7 +53,7 @@ body, html {
 /* === TARJETAS Y CONTENEDORES === */
 .cistern-card { 
     background: var(--card-bg); 
-    width: 100% !important;
+    width: 480px !important;
     padding: 15px; 
     margin-bottom: 15px !important; 
     border-radius: 12px !important; 
