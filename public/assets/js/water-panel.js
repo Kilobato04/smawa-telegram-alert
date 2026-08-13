@@ -395,7 +395,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Llenar el objeto de datos para la Lambda
         if (id === 'CISTERNA_C') {
-            window.botTelegramData.C = { porcentaje: fillPercentage, litros: currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0}), autonomia: autonomyText };
+            window.botTelegramData.C = { 
+                porcentaje: fillPercentage, 
+                litros: currentVol.liters.toLocaleString('es-MX', {maximumFractionDigits: 0}), 
+                autonomia: autonomyText,
+                gastoPromedio: analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0}) // <--- AGREGAR ESTO
+            };
         } else if (id === 'CISTERNA_B') {
             window.botTelegramData.B = { porcentaje: fillPercentage, gastoPromedio: analysis.avgHourlyConsumption.toLocaleString('es-MX', {maximumFractionDigits: 0}) };
         }
@@ -570,6 +575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const c_perc = window.botTelegramData.C?.porcentaje || '--';
     const c_lit = window.botTelegramData.C?.litros || '--';
     const c_aut = window.botTelegramData.C?.autonomia || '--';
+    const c_gas = window.botTelegramData.C?.gastoPromedio || '--';
     const b_perc = window.botTelegramData.B?.porcentaje || '--';
     const b_gas = window.botTelegramData.B?.gastoPromedio || '--';
 
