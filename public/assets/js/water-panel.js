@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <a href="${mapsUrl}" target="_blank" style="color: #007acc; text-decoration: none; font-weight: 500;"><span class="svg-icon">${ICONS.pin}</span> ${geo.lat}, ${geo.lng} ↗</a>
                         </p>
                         <p style="margin:2px 0 0 0; font-size:12px; color:#666;">
-                            <span class="svg-icon">${ICONS.ruler}</span> Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> <span style="color:#007acc; font-size:10px;">(Calibrada)</span> | ${batteryText}
+                            <span class="svg-icon">${ICONS.ruler}</span> Nivel de agua: <strong>${currentDist.toFixed(2)} m</strong> | ${batteryText}
                         </p>
                     </div>
                     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
