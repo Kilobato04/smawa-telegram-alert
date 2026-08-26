@@ -28,11 +28,35 @@ const ICONS = {
 };
 
 // --- FETCH HISTÓRICO ---
-async function fetchHistoricalData(token) {
+async function fetchHistoricalData(token, id) {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setHours(endDate.getHours() - 168); 
 
+    // 🌊 NUEVO FLUJO: AWS Lambda para Cisterna A (SMAAWA_003)
+    if (id === 'CISTERNA_A') {
+        const url = `https://imrnh5ugn0.execute-api.us-east-1.amazonaws.com/default/getData?action=history&deviceID=SMAAWA_003&start=${startDate.toISOString()}&end=${endDate.toISOString()}`;
+        
+        try {
+            const response = await fetch(url);
+            const json = await response.json();
+            
+            if (json && json.data && Array.isArray(json.data)) {
+                const sortedData = json.data.sort((a, b) => a.timestamp - b.timestamp);
+                
+                return sortedData.map(item => ({
+                    Data: (item.distance / 100).toString(), 
+                    TimeStamp: new Date(item.timestamp * 1000).toISOString() 
+                }));
+            }
+            return [];
+        } catch (error) {
+            console.error("❌ Error API AWS Cisterna A:", error);
+            return null;
+        }
+    }
+
+    // 💧 FLUJO ORIGINAL: Sidtec para Cisternas B y C
     const url = `/api/GetData?token=${token}&idSensor=15&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
     try {
@@ -44,11 +68,25 @@ async function fetchHistoricalData(token) {
     }
 }
 
-async function fetchLatestBattery(token) {
+async function fetchLatestBattery(token, id) {
+    // 🌊 NUEVO FLUJO: AWS Lambda para Cisterna A
+    if (id === 'CISTERNA_A') {
+        const url = `https://imrnh5ugn0.execute-api.us-east-1.amazonaws.com/default/getData?action=latest&deviceID=SMAAWA_003`;
+        try {
+            const response = await fetch(url);
+            const json = await response.json();
+            if (json && json.data && json.data.battery) return parseFloat(json.data.battery);
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // 💧 FLUJO ORIGINAL: Sidtec para Cisternas B y C
     const endDate = new Date();
     const startDate = new Date();
     startDate.setHours(startDate.getHours() - 2); 
-
+    
     const url = `/api/GetData?token=${token}&idSensor=1&dtStart=${encodeURIComponent(formatDateForApi(startDate))}&dtEnd=${encodeURIComponent(formatDateForApi(endDate))}`;
 
     try {
@@ -307,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const promises = activeCisternKeys.map(async (id) => {
         const geo = APP_CONFIG.GEOMETRY[id];
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
-        const [apiRawData, batteryVal] = await Promise.all([ fetchHistoricalData(token), fetchLatestBattery(token) ]);
+        const [apiRawData, batteryVal] = await Promise.all([ fetchHistoricalData(token, id), fetchLatestBattery(token, id) ]);
         return { id, geo, apiRawData, batteryVal };
     });
 
