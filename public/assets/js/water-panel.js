@@ -113,9 +113,9 @@ function processApiData(apiRawData, geo, cisternId) {
 
         if (!isNaN(rawDist)) {
             let dist = rawDist;
-            if (cisternId === "CISTERNA_A") dist = (rawDist * 0.8478) + 0.5709;
+            // if (cisternId === "CISTERNA_A") dist = (rawDist * 0.8478) + 0.5709; 
             if (dist < 0.1) dist = 0.1; 
-            if (dist > geo.height_m) dist = geo.height_m; 
+            if (dist > geo.height_m) dist = geo.height_m;
 
             if (lastTime !== null) {
                 let diff = currentTime.getTime() - lastTime.getTime();
