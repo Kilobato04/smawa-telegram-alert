@@ -35,7 +35,8 @@ async function fetchHistoricalData(token, id) {
 
     // 🌊 NUEVO FLUJO: AWS Lambda para Cisterna A (SMAAWA_003)
     if (id === 'CISTERNA_A') {
-        const url = `https://imrnh5ugn0.execute-api.us-east-1.amazonaws.com/default/getData?action=history&deviceID=SMAAWA_003&start=${startDate.toISOString()}&end=${endDate.toISOString()}`;
+        // 🔥 FIX: Actualizamos los parámetros a hours=168 y limit=2016
+        const url = `https://imrnh5ugn0.execute-api.us-east-1.amazonaws.com/default/getData?action=history&deviceID=SMAAWA_003&hours=168&limit=2016`;
         
         try {
             const response = await fetch(url);
