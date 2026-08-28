@@ -347,7 +347,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
     const promises = activeCisternKeys.map(async (id) => {
-        const geo = APP_CONFIG.GEOMETRY[id];
+        // Clonamos la geometría para modificarla dinámicamente sin afectar la constante global
+        let geo = { ...APP_CONFIG.GEOMETRY[id] };
+        
+        // Reducción del 25% (1/4) por la celda clausurada
+        if (id === 'CISTERNA_A' || id === 'CISTERNA_C') {
+            geo.area_m2 = geo.area_m2 * 0.75;
+            geo.max_capacity_l = geo.max_capacity_l * 0.75;
+        }
+
         const token = APP_CONFIG.API_TOKENS[geo.sensor_id];
         const [apiRawData, batteryVal] = await Promise.all([ fetchHistoricalData(token, id), fetchLatestBattery(token, id) ]);
         return { id, geo, apiRawData, batteryVal };
