@@ -152,12 +152,15 @@ function analyzeMetrics(series, geo) {
         const t = p.time.getTime();
         if (t >= last24hStart) {
             if (prevD !== null) {
-                if ((p.dist - prevD) > 0.015) { 
-                    let diffL = calcVolume(p.dist, geo).liters - calcVolume(prevD, geo).liters;
+                // 🔥 FIX: Si el nivel BAJA (Gasto de agua)
+                if ((prevD - p.dist) > 0.015) { 
+                    let diffL = calcVolume(prevD, geo).liters - calcVolume(p.dist, geo).liters;
                     totalConsumption24h += Math.abs(diffL);
                     prevD = p.dist; 
-                } else if ((prevD - p.dist) > 0.015) { 
-                    prevD = p.dist;
+                } 
+                // 🔥 FIX: Si el nivel SUBE (Recarga de agua / Pipa)
+                else if ((p.dist - prevD) > 0.015) { 
+                    prevD = p.dist; // Solo actualizamos la referencia alta, NO lo sumamos al gasto
                 }
             } else { prevD = p.dist; }
         }
